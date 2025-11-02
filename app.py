@@ -36,7 +36,7 @@ if "logged_in" not in st.session_state:
                 st.success("Account aangemaakt! Betaal nu om te activeren.")
                 # Stripe betaling link (testmode)
                 session_url = create_checkout_session(new_company_id, new_email)
-                st.markdown(f"[Betaal abonnement (€10/maand)]({session_url})")
+                st.markdown(f"[Betaal abonnement (€25/maand)]({session_url})")
                 st.rerun()
             else:
                 st.error("Vul alle velden in.")
