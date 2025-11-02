@@ -4,10 +4,11 @@ import streamlit as st
 stripe.api_key = st.secrets["STRIPE_SECRET_KEY"]
 
 def create_checkout_session(company_id, email):
+    price_id = st.secrets.get("STRIPE_PRICE_ID", "price_1SP8j501KZUMdI61Z1ODSYe0")  # Fallback ID
     session = stripe.checkout.Session.create(
         payment_method_types=['ideal', 'card'],
         line_items=[{
-            'price': st.secrets["STRIPE_PRICE_ID"],
+            'price': price_id,
             'quantity': 1,
         }],
         mode='subscription',
