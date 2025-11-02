@@ -103,3 +103,36 @@ def get_availability(company_id):
     conn.close()
     return df
 # Functies om diensten toe te voegen, beschikbaarheid, etc. (we voegen later toe)
+def add_booking(company_id, name, phone, service_id, date, time):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    created_at = datetime.now().isoformat()
+    c.execute("""
+        INSERT INTO bookings (company_id, name, phone, service_id, date, time, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (company_id, name, phone, service_id, date, time, created_at))
+    conn.commit()
+    booking_id = c.lastrowid
+    conn.close()
+    return booking_id
+
+def get_bookings(company_id):
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query("SELECT * FROM bookings WHERE company_id = ?", conn, params=(company_id,))
+    conn.close()
+    return df
+
+def get_available_slots(company_id, date):
+    availability = get_availability(company_id)
+    # Simpele logica: Neem de eerste dag's slots (uitbreiden later voor specifieke dag)
+    if not availability.empty:
+        start = pd.Timestamp(f"{date} {availability.iloc[0]['start_time']}")
+        end = pd.Timestamp(f"{date} {availability.iloc[0]['end_time']}")
+        slots = []
+        current = start
+        while current < end:
+            slot_time = current.strftime("%H:%M")
+            slots.append(slot_time)
+            current += pd.Timedelta(minutes=30)  # Default 30 min slots
+        return slots
+    return []
