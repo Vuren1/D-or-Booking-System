@@ -59,5 +59,47 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
+def add_company(name, email, password):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    created_at = datetime.now().isoformat()
+    c.execute("INSERT INTO companies (name, email, password, created_at) VALUES (?, ?, ?, ?)", (name, email, password, created_at))
+    conn.commit()
+    company_id = c.lastrowid
+    conn.close()
+    return company_id
 
+def get_company_by_email(email):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT * FROM companies WHERE email = ?", (email,))
+    company = c.fetchone()
+    conn.close()
+    return company
+
+def add_service(company_id, name, price, duration):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("INSERT INTO services (company_id, name, price, duration) VALUES (?, ?, ?, ?)", (company_id, name, price, duration))
+    conn.commit()
+    conn.close()
+
+def get_services(company_id):
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query("SELECT * FROM services WHERE company_id = ?", conn, params=(company_id,))
+    conn.close()
+    return df
+
+def add_availability(company_id, day, start_time, end_time):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("INSERT INTO availability (company_id, day, start_time, end_time) VALUES (?, ?, ?, ?)", (company_id, day, start_time, end_time))
+    conn.commit()
+    conn.close()
+
+def get_availability(company_id):
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query("SELECT * FROM availability WHERE company_id = ?", conn, params=(company_id,))
+    conn.close()
+    return df
 # Functies om diensten toe te voegen, beschikbaarheid, etc. (we voegen later toe)
