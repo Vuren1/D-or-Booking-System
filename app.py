@@ -34,6 +34,8 @@ if "logged_in" not in st.session_state:
             elif new_name and new_email and new_password:
                 new_company_id = add_company(new_name, new_email, new_password)
                 st.success("Account aangemaakt! Betaal nu om te activeren.")
+session_url = create_checkout_session(new_company_id, new_email)
+st.markdown(f"[Betaal abonnement (€25/maand)]({session_url})")
                 # Stripe betaling link (testmode)
                 session_url = create_checkout_session(new_company_id, new_email)
                 st.markdown(f"[Betaal abonnement (€25/maand)]({session_url})")
