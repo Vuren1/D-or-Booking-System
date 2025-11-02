@@ -127,8 +127,8 @@ if "logged_in" in st.session_state:
 # --- PUBLIEKE BOEKINGSPAGINA (VOOR KLANTEN) ---
 else:
     if not company_id:
-        st.error("Geen bedrijf gespecificeerd. Gebruik ?company=ID in de URL.")
-        st.stop()
+        # Geen melding tonen op hoofd-URL – alleen login
+        st.stop()  # Stopt de publieke code
 
     st.title(f"Boek bij bedrijf ID {company_id}")
 
