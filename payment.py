@@ -5,6 +5,7 @@ stripe.api_key = st.secrets["STRIPE_SECRET_KEY"]
 
 def create_checkout_session(company_id, email):
     price_id = st.secrets.get("STRIPE_PRICE_ID", "price_1SP8j501KZUMdI61Z1ODSYe0")  # Fallback ID
+    app_url = st.secrets.get("APP_URL", "https://d-or-booking-system-gwbucvc56tnfubjkhgzsqn.streamlit.app")  # Fallback URL
     session = stripe.checkout.Session.create(
         payment_method_types=['ideal', 'card'],
         line_items=[{
@@ -12,8 +13,8 @@ def create_checkout_session(company_id, email):
             'quantity': 1,
         }],
         mode='subscription',
-        success_url=st.secrets["APP_URL"] + f"/?session_id={{CHECKOUT_SESSION_ID}}",
-        cancel_url=st.secrets["APP_URL"],
+        success_url=app_url + f"/?session_id={{CHECKOUT_SESSION_ID}}",
+        cancel_url=app_url,
         customer_email=email,
         metadata={'company_id': str(company_id)}
     )
