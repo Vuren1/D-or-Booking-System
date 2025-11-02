@@ -4,3 +4,4 @@ sqlite3
 twilio
 python-dotenv
 streamlit-authenticator
+stripe
