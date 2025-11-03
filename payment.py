@@ -1,26 +1,41 @@
-# payment.py
 import os
 import stripe
 import streamlit as st
 
-def _get_secret(key: str) -> str:
-    """Lees secret uit ENV (GitHub/locaal) of uit st.secrets (Streamlit)."""
-    val = os.getenv(key)
-    if val:
-        return val
-    if key in st.secrets:
-        return st.secrets[key]
-    raise ValueError(f"Secret '{key}' ontbreekt")
 
-# Stripe initialiseren
-stripe.api_key = _get_secret("STRIPE_SECRET_KEY")
-
-def create_checkout_session(company_id: int, company_email: str, company_name: str = "") -> str | None:
-    """Maak een Stripe Checkout sessie aan en retourneer de URL."""
+# ───────────────────────────────────────────────────────────────
+# 1️⃣  Hulpfunctie om secrets op te halen
+# ───────────────────────────────────────────────────────────────
+def get_secret(key: str) -> str:
+    """Haalt veilige sleutel op uit Streamlit secrets of omgevingsvariabelen."""
     try:
-        price_id = _get_secret("STRIPE_PRICE_ID")
-        app_url  = _get_secret("APP_URL")
+        return st.secrets[key]
+    except Exception:
+        val = os.getenv(key)
+        if not val:
+            raise ValueError(f"Secret '{key}' ontbreekt in secrets.toml of ENV.")
+        return val
 
+
+# ───────────────────────────────────────────────────────────────
+# 2️⃣  Stripe initialisatie
+# ───────────────────────────────────────────────────────────────
+stripe.api_key = get_secret("STRIPE_SECRET_KEY")
+
+
+# ───────────────────────────────────────────────────────────────
+# 3️⃣  Maak Stripe Checkout-sessie aan
+# ───────────────────────────────────────────────────────────────
+def create_checkout_session(company_id: int, company_email: str, company_name: str = "") -> str:
+    """
+    Maakt een Stripe Checkout sessie aan en geeft de URL terug.
+    Na betaling wordt de gebruiker teruggestuurd met ?session_id=...&company=...
+    """
+    try:
+        price_id = get_secret("STRIPE_PRICE_ID")
+        app_url = get_secret("APP_URL")
+
+        # Maak de Stripe Checkout sessie aan
         session = stripe.checkout.Session.create(
             mode="subscription",
             payment_method_types=["card", "ideal"],
@@ -35,27 +50,39 @@ def create_checkout_session(company_id: int, company_email: str, company_name: s
             },
         )
         return session.url
+
     except Exception as e:
-        # In Streamlit kun je dit tonen; lokaal/logs mag je printen
-        try:
-            st.error(f"Fout bij aanmaken van de Stripe sessie: {e}")
-        except Exception:
-            print("Fout bij aanmaken van Stripe sessie:", e)
+        st.warning(f"⚠️ Fout bij aanmaken Stripe-sessie: {e}")
         return None
 
+
+# ───────────────────────────────────────────────────────────────
+# 4️⃣  Controleer betaling
+# ───────────────────────────────────────────────────────────────
 def check_payment(session_id: str) -> bool:
-    """Check of de checkout/subscription betaald/actief is."""
+    """
+    Controleert of een sessie is betaald (voltooid).
+    """
     try:
-        sess = stripe.checkout.Session.retrieve(
-            session_id, expand=["subscription", "payment_intent"]
-        )
-        # direct betaald?
-        if getattr(sess, "payment_status", None) == "paid":
-            return True
-        # of subscription actief / trialing
-        sub = getattr(sess, "subscription", None)
-        if sub and getattr(sub, "status", "") in ("active", "trialing"):
-            return True
+        s = stripe.checkout.Session.retrieve(session_id)
+        return s.payment_status == "paid"
+    except Exception as e:
+        st.warning(f"⚠️ Kon betaling niet controleren: {e}")
         return False
-    except Exception:
-        return False
+
+
+# ───────────────────────────────────────────────────────────────
+# 5️⃣  Haal company_id uit Stripe sessie
+# ───────────────────────────────────────────────────────────────
+def get_company_id_from_session(session_id: str):
+    """
+    Haalt company_id op uit Stripe sessie metadata.
+    Wordt gebruikt in app.py om automatisch in te loggen na betaling.
+    """
+    try:
+        s = stripe.checkout.Session.retrieve(session_id)
+        if hasattr(s, "metadata") and s.metadata:
+            return int(s.metadata.get("company_id")) if s.metadata.get("company_id") else None
+    except Exception as e:
+        st.warning(f"⚠️ Kon company_id niet ophalen: {e}")
+    return None
