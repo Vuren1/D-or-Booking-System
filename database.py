@@ -8,20 +8,21 @@ DB_NAME = "data/bookings.db"
 os.makedirs("data", exist_ok=True)
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect("data.db")
     c = conn.cursor()
-    
-    # Tabel voor bedrijven (tenants)
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS companies (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT UNIQUE,
-            password TEXT,
-            paid INTEGER DEFAULT 0,
-            created_at TEXT
+
+    # ... je andere tabellen
+
+    # Nieuwe tabel voor sms-herinneringsinstellingen
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS sms_settings (
+            company_id INTEGER PRIMARY KEY,
+            days_before INTEGER DEFAULT 1,
+            hours_before INTEGER DEFAULT 1
         )
-    ''')
+    """)
+    conn.commit()
+    conn.close()
     
     # Tabel voor diensten per bedrijf
     c.execute('''
