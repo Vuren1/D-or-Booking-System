@@ -164,3 +164,11 @@ def is_company_paid(company_id):
     result = c.fetchone()
     conn.close()
     return result[0] if result else 0
+
+def get_company_by_id(company_id):
+    conn = sqlite3.connect("data.db")
+    c = conn.cursor()
+    c.execute("SELECT * FROM companies WHERE id=?", (company_id,))
+    result = c.fetchone()
+    conn.close()
+    return result
