@@ -1,26 +1,29 @@
 import stripe
 import streamlit as st
 
-# ----------------------------------------------------------
-# STRIPE CONFIGURATIE
-# ----------------------------------------------------------
-# Zet je test secret key in Streamlit secrets.toml als:
-# STRIPE_SECRET_KEY = "sk_test_..."
-# STRIPE_PRICE_ID = "price_..."
-# APP_URL = "https://d-or-booking-system-gwbucvc56tnfubjkhgzsqn.streamlit.app"
-# ----------------------------------------------------------
+# -----------------------------------------------
+# Stripe-instellingen vanuit Streamlit secrets
+# -----------------------------------------------
+def get_secret(key: str, required: bool = True):
+    """Veilig ophalen van secret variabelen."""
+    value = st.secrets.get(key)
+    if required and not value:
+        st.error(f"❌ '{key}' ontbreekt in secrets.toml. Voeg dit toe in Streamlit → Settings → Secrets.")
+        raise ValueError(f"Secret '{key}' ontbreekt")
+    return value
 
-stripe.api_key = st.secrets["STRIPE_SECRET_KEY"]
+stripe.api_key = get_secret("STRIPE_SECRET_KEY")
 
+# -----------------------------------------------
+# Maak een Stripe Checkout-sessie aan
+# -----------------------------------------------
 def create_checkout_session(company_id: int, email: str) -> str:
-    """Maak een Stripe Checkout sessie aan en geef de URL terug."""
-    price_id = st.secrets.get("STRIPE_PRICE_ID")
-    app_url = st.secrets.get("APP_URL")
-
-    if not price_id or not app_url:
-        raise ValueError("❌ STRIPE_PRICE_ID of APP_URL ontbreekt in secrets.toml")
-
+    """Maakt een Stripe checkout sessie aan en geeft de URL terug."""
     try:
+        price_id = get_secret("STRIPE_PRICE_ID")
+        app_url = get_secret("APP_URL")
+
+        # Maak de sessie aan in testmodus
         session = stripe.checkout.Session.create(
             mode="subscription",
             payment_method_types=["card", "ideal"],
@@ -33,14 +36,17 @@ def create_checkout_session(company_id: int, email: str) -> str:
         return session.url
 
     except Exception as e:
-        st.error(f"Fout bij aanmaken van betaalpagina: {e}")
+        st.error(f"⚠️ Fout bij aanmaken van de Stripe sessie: {e}")
         return "#"
 
+# -----------------------------------------------
+# Controleer of een betaling is geslaagd
+# -----------------------------------------------
 def check_payment(session_id: str) -> bool:
-    """Controleer of betaling of abonnement succesvol is."""
+    """Controleert of betaling of abonnement succesvol is."""
     try:
         session = stripe.checkout.Session.retrieve(session_id)
-        # Voor abonnementen is 'complete' status voldoende
+        # Abonnementen hebben status 'complete' of 'paid'
         return session.status == "complete" or session.payment_status == "paid"
     except Exception as e:
         st.warning(f"Kon betaling niet controleren: {e}")
