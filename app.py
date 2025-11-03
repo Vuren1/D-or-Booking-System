@@ -53,23 +53,54 @@ except Exception:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# AUTO-LOGIN NA STRIPE (activatie + sessie opbouwen)
-# ──────────────────────────────────────────────────────────────────────────────
+# ───────────────── Auto-activate & auto-login na Stripe ─────────────────
 if session_id and "logged_in" not in st.session_state:
-    # Als ?company ontbreekt, probeer uit Stripe metadata te halen
-    if not company_id_param:
-        company_id_param = get_company_id_from_session(session_id)
+    # 1) Probeer company uit de URL
+    cid = company_id_param
 
-    if company_id_param and check_payment(session_id):
-        info = get_company_by_id(company_id_param)
-        update_company_paid(company_id_param)
+    # 2) Anders: haal company_id uit Stripe metadata
+    if not cid:
+        try:
+            from payment import get_company_id_from_session  # als je helper hebt
+            cid = get_company_id_from_session(session_id)
+        except Exception:
+            cid = None
 
+    # 3) Als we het nog niet weten: haal e-mail uit Stripe sessie en zoek in DB
+    if not cid:
+        try:
+            import stripe, os
+            sk = os.getenv("STRIPE_SECRET_KEY") or st.secrets["STRIPE_SECRET_KEY"]
+            stripe.api_key = sk
+            s = stripe.checkout.Session.retrieve(session_id, expand=["customer_details"])
+            email = None
+            # bron kan variëren:
+            if getattr(s, "customer_details", None) and s.customer_details.email:
+                email = s.customer_details.email
+            elif getattr(s, "customer_email", None):
+                email = s.customer_email
+            if email:
+                rec = get_company_by_email(email)
+                if rec:
+                    cid = rec[0]  # id
+        except Exception:
+            pass
+
+    # 4) Als we een company_id hebben én de betaling is OK -> login + activate
+    if cid and check_payment(session_id):
+        info = get_company_by_id(cid)
+        update_company_paid(cid)
         st.session_state.logged_in = True
-        st.session_state.company_id = company_id_param
-        st.session_state.company_name = info[1] if info else f"Bedrijf #{company_id_param}"
-
+        st.session_state.company_id = cid
+        st.session_state.company_name = info[1] if info else f"Bedrijf #{cid}"
+        # Zet de company ook zichtbaar in de URL (fijn voor refresh/links)
+        st.experimental_set_query_params(company=cid)
         st.success("✅ Betaling bevestigd. Je account is nu geactiveerd en je bent ingelogd.")
         st.rerun()
+    else:
+        # Laat iets zien dat helpt debuggen i.p.v. stil blijven staan
+        st.info("✅ Betaling bevestigd. Je wordt zo doorgestuurd…")
+        st.caption("Tip: als dit scherm blijft staan, controleer of de success_url in payment.py de parameter &company=<id> bevat.")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
