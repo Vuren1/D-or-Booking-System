@@ -1,6 +1,7 @@
 import os
 import stripe
 import streamlit as st
+import sqlite3
 
 
 # ───────────────────────────────────────────────────────────────
@@ -24,7 +25,23 @@ stripe.api_key = get_secret("STRIPE_SECRET_KEY")
 
 
 # ───────────────────────────────────────────────────────────────
-# 3️⃣  Maak Stripe Checkout-sessie aan
+# 3️⃣  Database-helper voor update van 'paid'-status
+# ───────────────────────────────────────────────────────────────
+def update_company_paid(company_id: int):
+    """Markeer een bedrijf als betaald in de database."""
+    try:
+        conn = sqlite3.connect("database.db")
+        c = conn.cursor()
+        c.execute("UPDATE companies SET paid = 1 WHERE id = ?", (company_id,))
+        conn.commit()
+        conn.close()
+        st.info(f"✅ Bedrijf {company_id} gemarkeerd als betaald.")
+    except Exception as e:
+        st.warning(f"⚠️ Fout bij updaten van betaalstatus: {e}")
+
+
+# ───────────────────────────────────────────────────────────────
+# 4️⃣  Maak Stripe Checkout-sessie aan
 # ───────────────────────────────────────────────────────────────
 def create_checkout_session(company_id: int, company_email: str, company_name: str = "") -> str:
     """
@@ -57,22 +74,28 @@ def create_checkout_session(company_id: int, company_email: str, company_name: s
 
 
 # ───────────────────────────────────────────────────────────────
-# 4️⃣  Controleer betaling
+# 5️⃣  Controleer betaling (nu met database-update)
 # ───────────────────────────────────────────────────────────────
 def check_payment(session_id: str) -> bool:
     """
     Controleert of een sessie is betaald (voltooid).
+    Als betaald → update automatisch companies.paid = 1
     """
     try:
         s = stripe.checkout.Session.retrieve(session_id)
-        return s.payment_status == "paid"
+        if s.payment_status == "paid":
+            if hasattr(s, "metadata") and s.metadata.get("company_id"):
+                company_id = int(s.metadata.get("company_id"))
+                update_company_paid(company_id)
+            return True
+        return False
     except Exception as e:
         st.warning(f"⚠️ Kon betaling niet controleren: {e}")
         return False
 
 
 # ───────────────────────────────────────────────────────────────
-# 5️⃣  Haal company_id uit Stripe sessie
+# 6️⃣  Haal company_id uit Stripe sessie
 # ───────────────────────────────────────────────────────────────
 def get_company_id_from_session(session_id: str):
     """
