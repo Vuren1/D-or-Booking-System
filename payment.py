@@ -17,7 +17,7 @@ stripe.api_key = get_secret("STRIPE_SECRET_KEY")
 # -----------------------------------------------
 # Maak een Stripe Checkout-sessie aan
 # -----------------------------------------------
-def create_checkout_session(company_id: int, email: str) -> str:
+def success_url = f"{app_url}/?session_id={{CHECKOUT_SESSION_ID}}&company={company_id}"
     """Maakt een Stripe checkout sessie aan en geeft de URL terug."""
     try:
         price_id = get_secret("STRIPE_PRICE_ID")
