@@ -8,23 +8,24 @@ from database import (
 from twilio_sms import send_sms
 from payment import create_checkout_session, check_payment
 
-# --------------------------
-# INIT
-# --------------------------
-st.set_page_config(page_title="D'or Booking System", layout="centered")
-st.title("D'or Booking System")
+# ----------------------------------------------------
+# Initialiseer database
+# ----------------------------------------------------
 init_db()
 
-# --------------------------
-# Query parameters
-# --------------------------
+st.set_page_config(page_title="D'or Booking System", layout="centered")
+st.title("D'or Booking System")
+
+# ----------------------------------------------------
+# Query parameters (voor betaling of bedrijf)
+# ----------------------------------------------------
 query_params = st.experimental_get_query_params()
 company_id_param = query_params.get("company", [None])[0]
 session_id = query_params.get("session_id", [None])[0]
 
-# --------------------------
-# REGISTRATIE / LOGIN
-# --------------------------
+# ----------------------------------------------------
+# REGISTRATIE & LOGIN
+# ----------------------------------------------------
 if "logged_in" not in st.session_state:
     st.subheader("Nieuw bedrijf? Registreer hier")
     with st.form("register_form"):
@@ -39,49 +40,64 @@ if "logged_in" not in st.session_state:
             elif new_name and new_email and new_password:
                 new_company_id = add_company(new_name, new_email, new_password)
                 st.success("✅ Account aangemaakt! Betaal nu om te activeren.")
-                session_url = create_checkout_session(new_company_id, new_email)
-                st.markdown(f"[Klik hier om te betalen (€25/maand)]({session_url})", unsafe_allow_html=True)
+                checkout_url = create_checkout_session(new_company_id, new_email)
+                st.markdown(f"[Klik hier om te betalen (€25/maand)]({checkout_url})")
             else:
                 st.error("Vul alle velden in.")
 
-    # Login
+    # --------------------
+    # LOGIN
+    # --------------------
     st.subheader("Bestaand bedrijf? Log in")
-    username = st.text_input("E-mail")
-    password = st.text_input("Wachtwoord", type="password")
-
+    login_email = st.text_input("E-mail", key="login_email")
+    login_password = st.text_input("Wachtwoord", type="password", key="login_pw")
     if st.button("Inloggen"):
-        company = get_company_by_email(username)
-        if company and company[3] == password:
+        company = get_company_by_email(login_email)
+        if company and company[3] == login_password:
             st.session_state.logged_in = True
             st.session_state.company_id = company[0]
             st.session_state.company_name = company[1]
+            st.success("Succesvol ingelogd!")
             st.rerun()
         else:
             st.error("Onjuiste inloggegevens.")
 
-# --------------------------
-# DASHBOARD (NA INLOGGEN)
-# --------------------------
-elif "logged_in" in st.session_state:
+# ----------------------------------------------------
+# DASHBOARD (alleen na betaling)
+# ----------------------------------------------------
+if "logged_in" in st.session_state:
     company_id = st.session_state.company_id
     company_name = st.session_state.company_name
 
-    # Betaling succesvol?
+    # ✅ Automatisch activeren + SMS na betaling
     if session_id and check_payment(session_id):
         update_company_paid(company_id)
-        st.success("✅ Betaling gelukt! Dashboard geactiveerd.")
+        st.session_state.logged_in = True
+        st.session_state.company_id = company_id
+
+        # Verstuur bevestigings-SMS naar admin (optioneel e-mailadres of vast nummer)
+        try:
+            admin_phone = st.secrets.get("TWILIO_PHONE")
+            msg = f"Beste {company_name}, je betaling voor D’or Booking System is succesvol ontvangen. Je account is nu geactiveerd."
+            send_sms(admin_phone, msg)
+            st.success("✅ Betaling gelukt! Dashboard geactiveerd en SMS-bevestiging verstuurd.")
+        except Exception as e:
+            st.warning(f"Betaling gelukt, maar SMS kon niet worden verzonden: {e}")
+
         st.rerun()
 
-    # Als betaald -> dashboard
+    # Controleer of het bedrijf actief (betaald) is
     if is_company_paid(company_id):
         st.header(f"Dashboard - {company_name}")
 
-        # Diensten
+        # --------------------
+        # Diensten beheren
+        # --------------------
         st.subheader("Diensten")
         with st.form("add_service"):
-            name = st.text_input("Naam van dienst")
+            name = st.text_input("Naam")
             price = st.number_input("Prijs (€)", min_value=0.0)
-            duration = st.number_input("Duur (minuten)", min_value=15)
+            duration = st.number_input("Duur (min)", min_value=15)
             if st.form_submit_button("Toevoegen") and name:
                 add_service(company_id, name, price, duration)
                 st.success("Dienst toegevoegd!")
@@ -93,16 +109,20 @@ elif "logged_in" in st.session_state:
         else:
             st.info("Nog geen diensten toegevoegd.")
 
-        # Beschikbaarheid
+        # --------------------
+        # Beschikbaarheid beheren
+        # --------------------
         st.subheader("Beschikbaarheid")
-        with st.form("add_avail"):
-            day = st.selectbox("Dag", ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"])
+        with st.form("add_availability"):
+            day = st.selectbox(
+                "Dag",
+                ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"]
+            )
             col1, col2 = st.columns(2)
             with col1:
                 start = st.time_input("Van", value=pd.Timestamp("09:00").time())
             with col2:
                 end = st.time_input("Tot", value=pd.Timestamp("18:00").time())
-
             if st.form_submit_button("Opslaan"):
                 add_availability(company_id, day, str(start), str(end))
                 st.success("Beschikbaarheid opgeslagen!")
@@ -112,9 +132,11 @@ elif "logged_in" in st.session_state:
         if not avail.empty:
             st.dataframe(avail[["day", "start_time", "end_time"]])
         else:
-            st.info("Nog geen beschikbaarheid ingevoerd.")
+            st.info("Nog geen beschikbaarheid toegevoegd.")
 
+        # --------------------
         # Uitloggen
+        # --------------------
         if st.button("Uitloggen"):
             st.session_state.clear()
             st.rerun()
@@ -122,17 +144,17 @@ elif "logged_in" in st.session_state:
     else:
         st.warning("Je account is nog niet actief. Betaal om toegang te krijgen tot het dashboard.")
         checkout_url = create_checkout_session(company_id, st.session_state.get("company_name", ""))
-        st.markdown(f"[Klik hier om te betalen (€25/maand)]({checkout_url})", unsafe_allow_html=True)
+        st.markdown(f"[Klik hier om te betalen (€25/maand)]({checkout_url})")
 
-# --------------------------
-# KLANT BOEKINGSPAGINA
-# --------------------------
+# ----------------------------------------------------
+# KLANTENBOEKING (publieke pagina)
+# ----------------------------------------------------
 elif company_id_param:
     st.title(f"Boek een afspraak bij bedrijf #{company_id_param}")
 
     services = get_services(company_id_param)
     if services.empty:
-        st.info("Geen diensten beschikbaar.")
+        st.info("Geen diensten beschikbaar voor dit bedrijf.")
         st.stop()
 
     with st.form("book_form"):
@@ -144,9 +166,10 @@ elif company_id_param:
 
         if st.form_submit_button("Boek nu!"):
             if not name or not phone.startswith("+"):
-                st.error("Vul alle verplichte velden in (en gebruik +31...).")
+                st.error("Vul alle verplichte velden correct in.")
             else:
                 service_id = services[services["name"] == service]["id"].iloc[0]
                 add_booking(company_id_param, name, phone, service_id, str(date), time)
-                send_sms(phone, f"Beste {name}, je afspraak is bevestigd op {date} om {time}.")
-                st.success("✅ Boeking gelukt! Bevestiging per SMS verstuurd.")
+                msg = f"Beste {name}, je afspraak is bevestigd op {date} om {time}."
+                send_sms(phone, msg)
+                st.success("✅ Boeking bevestigd! SMS verzonden.")
