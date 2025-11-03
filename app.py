@@ -114,6 +114,23 @@ elif "logged_in" in st.session_state:
         else:
             st.info("Nog geen beschikbaarheid ingevoerd.")
 
+        # ----------------------------------------------------
+# SMS-herinnering instellingen
+# ----------------------------------------------------
+st.subheader("📱 SMS Herinneringen")
+days_before, hours_before = get_sms_settings(company_id)
+
+with st.form("sms_settings_form"):
+    st.markdown("Stel hier in wanneer klanten een herinnering ontvangen voor hun afspraak.")
+    col1, col2 = st.columns(2)
+    with col1:
+        new_days = st.number_input("Dagen vóór afspraak", min_value=0, max_value=7, value=days_before)
+    with col2:
+        new_hours = st.number_input("Uren vóór afspraak (op de dag zelf)", min_value=0, max_value=23, value=hours_before)
+    if st.form_submit_button("Opslaan"):
+        update_sms_settings(company_id, new_days, new_hours)
+        st.success("SMS-herinneringsinstellingen opgeslagen!")
+
         # Uitloggen
         if st.button("Uitloggen"):
             st.session_state.clear()
@@ -128,12 +145,14 @@ elif "logged_in" in st.session_state:
 # KLANT BOEKINGSPAGINA
 # --------------------------
 elif company_id_param:
-    st.title(f"Boek een afspraak bij bedrijf #{company_id_param}")
+    company_id = int(company_id_param)
+    company_info = get_company_by_id(company_id)  # voeg deze helper toe in database.py
+    company_name = company_info[1] if company_info else "Onbekend Bedrijf"
 
-    services = get_services(company_id_param)
-    if services.empty:
-        st.info("Geen diensten beschikbaar.")
-        st.stop()
+    st.markdown(
+        f"<h1 style='text-align:center;color:#FFD700;'>Boek een afspraak bij {company_name}</h1>",
+        unsafe_allow_html=True
+    )
 
     with st.form("book_form"):
         name = st.text_input("Jouw naam*")
