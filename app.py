@@ -29,25 +29,20 @@ except Exception:
     company_id_param = None
 
 # -----------------------------
-# Auto-activate & auto-login na Stripe (komt terug met ?session_id=...&company=ID)
-# Dit doen we VOOR we de route kiezen.
-# -----------------------------
-if session_id and company_id_param and "logged_in" not in st.session_state:
-    if check_payment(session_id):
+# Auto-activate & auto-login na Stripe
+if session_id and "logged_in" not in st.session_state:
+    # Als ?company ontbreekt, haal hem uit Stripe metadata
+    if not company_id_param:
+        company_id_param = get_company_id_from_session(session_id)
+
+    if company_id_param and check_payment(session_id):
         info = get_company_by_id(company_id_param)
         update_company_paid(company_id_param)
         st.session_state.logged_in = True
         st.session_state.company_id = company_id_param
         st.session_state.company_name = info[1] if info else f"Bedrijf #{company_id_param}"
-        # optionele admin-SMS bij succesvolle activatie
-        admin_phone = st.secrets.get("TWILIO_PHONE")
-        if admin_phone:
-            try:
-                send_sms(admin_phone, f"✅ {st.session_state.company_name} is zojuist geactiveerd.")
-            except Exception:
-                pass
-        st.success("✅ Betaling gelukt! Je bent nu ingelogd.")
-        st.rerun()
+        st.success("✅ Betaling gelukt! Dashboard geactiveerd.")
+        st.experimental_rerun()
 
 # ===================================================
 # ROUTING: 1) Dashboard (ingelogd) → 2) Publiek (company=) → 3) Login/Registratie
