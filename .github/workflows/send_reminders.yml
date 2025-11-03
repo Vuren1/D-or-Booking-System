@@ -32,9 +32,12 @@ jobs:
         run: |
           echo "Omgevingsvariabelen geladen"
 
-      - name: 🚀 Run reminder scheduler
-        env:
-          TWILIO_SID: ${{ secrets.TWILIO_SID }}
-          TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
-          TWILIO_PHONE: ${{ secrets.TWILIO_PHONE }}
-        run: python reminder_scheduler.py
+          - name: 🕒 Run reminder scheduler
+      env:
+        TWILIO_SID: ${{ secrets.TWILIO_SID }}
+        TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
+        TWILIO_PHONE: ${{ secrets.TWILIO_PHONE }}
+        TEST_SMS_TO: ${{ secrets.TEST_SMS_TO }}
+      run: |
+        python reminder_scheduler.py
+
