@@ -1,13 +1,38 @@
-import sqlite3
-import pandas as pd
-from datetime import datetime, timedelta
 import os
+import sqlite3
+from datetime import datetime, timedelta, time as dtime
+import pandas as pd
 
-# --- Pad en map ---
-DB_NAME = "data/bookings.db"
+# -------------------------------------------------
+# Pad + DB bestand
+# -------------------------------------------------
 os.makedirs("data", exist_ok=True)
+DB_NAME = "data/bookings.db"
 
 
+# -------------------------------------------------
+# Helper: migratie voor oude DB's
+# -------------------------------------------------
+def _ensure_booking_items_snapshot_columns(conn: sqlite3.Connection):
+    """
+    Zorgt dat booking_items de snapshot-kolommen heeft (name, price, duration).
+    Hiermee blijven oude databases werken zonder dat je data wist.
+    """
+    c = conn.cursor()
+    c.execute("PRAGMA table_info(booking_items)")
+    cols = {row[1] for row in c.fetchall()}
+    if "name" not in cols:
+        c.execute("ALTER TABLE booking_items ADD COLUMN name TEXT")
+    if "price" not in cols:
+        c.execute("ALTER TABLE booking_items ADD COLUMN price REAL")
+    if "duration" not in cols:
+        c.execute("ALTER TABLE booking_items ADD COLUMN duration INTEGER")
+    conn.commit()
+
+
+# -------------------------------------------------
+# DB init
+# -------------------------------------------------
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -24,19 +49,18 @@ def init_db():
         )
     """)
 
-    # Categorieën met optionele beschrijving (per bedrijf)
+    # Categorieën met optionele beschrijving
     c.execute("""
         CREATE TABLE IF NOT EXISTS categories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             company_id INTEGER,
             name TEXT,
             description TEXT,
-            UNIQUE(company_id, name),
             FOREIGN KEY (company_id) REFERENCES companies(id)
         )
     """)
 
-    # Diensten
+    # Diensten (incl. category + description)
     c.execute("""
         CREATE TABLE IF NOT EXISTS services (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,7 +68,7 @@ def init_db():
             name TEXT,
             price REAL,
             duration INTEGER,
-            category TEXT DEFAULT 'Algemeen',
+            category TEXT,
             description TEXT,
             FOREIGN KEY (company_id) REFERENCES companies(id)
         )
@@ -55,28 +79,29 @@ def init_db():
         CREATE TABLE IF NOT EXISTS availability (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             company_id INTEGER,
-            day TEXT,              -- Maandag, Dinsdag, ...
-            start_time TEXT,       -- HH:MM
-            end_time TEXT,         -- HH:MM
+            day TEXT,
+            start_time TEXT,
+            end_time TEXT,
             FOREIGN KEY (company_id) REFERENCES companies(id)
         )
     """)
 
-    # Boeking + items
+    # Boekingen
     c.execute("""
         CREATE TABLE IF NOT EXISTS bookings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             company_id INTEGER,
             name TEXT,
             phone TEXT,
-            date TEXT,             -- YYYY-MM-DD
-            time TEXT,             -- HH:MM
+            date TEXT,         -- YYYY-MM-DD
+            time TEXT,         -- HH:MM
             total_price REAL DEFAULT 0,
             created_at TEXT,
             FOREIGN KEY (company_id) REFERENCES companies(id)
         )
     """)
 
+    # Boekingsitems (met snapshot kolommen)
     c.execute("""
         CREATE TABLE IF NOT EXISTS booking_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,22 +115,26 @@ def init_db():
         )
     """)
 
-    # Herinnering-instellingen (SMS/WhatsApp)
+    # ✅ Migratie-helper NA het creëren van booking_items
+    _ensure_booking_items_snapshot_columns(conn)
+
+    # Herinneringen-instellingen (voor sms/whatsapp)
     c.execute("""
         CREATE TABLE IF NOT EXISTS reminder_settings (
-            company_id INTEGER PRIMARY KEY,
-            enabled INTEGER DEFAULT 0,                 -- globale schakelaar
-            sms_enabled INTEGER DEFAULT 1,             -- kanaal: sms
-            whatsapp_enabled INTEGER DEFAULT 0,        -- kanaal: whatsapp
-            days_before INTEGER DEFAULT 1,             -- aantal dagen vóór
-            send_time TEXT DEFAULT '09:00',            -- HH:MM, lokale tz
-            same_day_enabled INTEGER DEFAULT 0,        -- 2e herinnering op dezelfde dag
-            same_day_minutes_before INTEGER DEFAULT 120,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER,
+            enabled INTEGER DEFAULT 0,
+            sms_enabled INTEGER DEFAULT 1,
+            whatsapp_enabled INTEGER DEFAULT 0,
+            days_before INTEGER DEFAULT 1,
+            send_time TEXT DEFAULT '09:00',
+            same_day_enabled INTEGER DEFAULT 0,
+            same_day_minutes_before INTEGER DEFAULT 60,
             tz TEXT DEFAULT 'Europe/Brussels',
-            template_day_before_sms TEXT DEFAULT 'Herinnering: je afspraak bij {company} op {date} om {time}.',
-            template_same_day_sms  TEXT DEFAULT 'Tot straks! Je afspraak is om {time} bij {company}.',
-            template_day_before_wa  TEXT DEFAULT 'Herinnering (WhatsApp): {company} – {date} {time}.',
-            template_same_day_wa   TEXT DEFAULT 'WhatsApp: je afspraak is om {time} bij {company}.',
+            template_day_before_sms TEXT,
+            template_same_day_sms TEXT,
+            template_day_before_wa TEXT,
+            template_same_day_wa TEXT,
             FOREIGN KEY (company_id) REFERENCES companies(id)
         )
     """)
@@ -114,20 +143,24 @@ def init_db():
     conn.close()
 
 
-# ---------- Companies ----------
-def add_company(name, email, password):
+# -------------------------------------------------
+# Companies
+# -------------------------------------------------
+def add_company(name: str, email: str, password: str) -> int:
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     created_at = datetime.now().isoformat()
-    c.execute("INSERT INTO companies (name, email, password, created_at) VALUES (?, ?, ?, ?)",
-              (name, email, password, created_at))
+    c.execute(
+        "INSERT INTO companies (name, email, password, created_at) VALUES (?,?,?,?)",
+        (name, email, password, created_at),
+    )
     conn.commit()
     company_id = c.lastrowid
     conn.close()
     return company_id
 
 
-def get_company_by_email(email):
+def get_company_by_email(email: str):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("SELECT * FROM companies WHERE email = ?", (email,))
@@ -136,15 +169,7 @@ def get_company_by_email(email):
     return row
 
 
-def update_company_paid(company_id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("UPDATE companies SET paid = 1 WHERE id = ?", (company_id,))
-    conn.commit()
-    conn.close()
-
-
-def is_company_paid(company_id) -> int:
+def is_company_paid(company_id: int) -> int:
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("SELECT paid FROM companies WHERE id = ?", (company_id,))
@@ -153,15 +178,33 @@ def is_company_paid(company_id) -> int:
     return row[0] if row else 0
 
 
-# ---------- Categories ----------
-def upsert_category(company_id: int, name: str, description: str = ""):
+def update_company_paid(company_id: int, paid: int = 1):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("""
-        INSERT INTO categories (company_id, name, description)
-        VALUES (?, ?, ?)
-        ON CONFLICT(company_id, name) DO UPDATE SET description = excluded.description
-    """, (company_id, name.strip(), description.strip()))
+    c.execute("UPDATE companies SET paid = ? WHERE id = ?", (paid, company_id))
+    conn.commit()
+    conn.close()
+
+
+def get_company_name_by_id(company_id: int) -> str:
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT name FROM companies WHERE id = ?", (company_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else f"bedrijf #{company_id}"
+
+
+# -------------------------------------------------
+# Categories
+# -------------------------------------------------
+def add_category(company_id: int, name: str, description: str = ""):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO categories (company_id, name, description) VALUES (?,?,?)",
+        (company_id, name, description),
+    )
     conn.commit()
     conn.close()
 
@@ -169,256 +212,293 @@ def upsert_category(company_id: int, name: str, description: str = ""):
 def get_categories(company_id: int) -> pd.DataFrame:
     conn = sqlite3.connect(DB_NAME)
     df = pd.read_sql_query(
-        "SELECT id, name, description FROM categories WHERE company_id = ? ORDER BY name ASC",
-        conn, params=(company_id,))
+        "SELECT * FROM categories WHERE company_id = ? ORDER BY name ASC",
+        conn,
+        params=(company_id,),
+    )
     conn.close()
     return df
 
 
-def get_category_description(company_id: int, name: str) -> str:
+def update_category(category_id: int, name: str, description: str):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT description FROM categories WHERE company_id = ? AND name = ?",
-              (company_id, name))
-    row = c.fetchone()
-    conn.close()
-    return row[0] if row else ""
-
-
-# ---------- Services ----------
-def add_service(company_id, name, price, duration, category="Algemeen", description=None):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("""
-        INSERT INTO services (company_id, name, price, duration, category, description)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (company_id, name, price, duration, category, description))
+    c.execute(
+        "UPDATE categories SET name = ?, description = ? WHERE id = ?",
+        (name, description, category_id),
+    )
     conn.commit()
     conn.close()
 
 
-def update_service(service_id: int, company_id: int, name: str, price: float,
-                   duration: int, category: str, description: str | None):
+def delete_category(category_id: int):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("""
-        UPDATE services
-           SET name=?, price=?, duration=?, category=?, description=?
-         WHERE id=? AND company_id=?
-    """, (name, price, duration, category, description, service_id, company_id))
+    c.execute("DELETE FROM categories WHERE id = ?", (category_id,))
     conn.commit()
     conn.close()
 
 
-def delete_service(service_id: int, company_id: int):
+# -------------------------------------------------
+# Services
+# -------------------------------------------------
+def add_service(company_id: int, name: str, price: float, duration: int, category: str, description: str = ""):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("DELETE FROM services WHERE id=? AND company_id=?", (service_id, company_id))
+    c.execute(
+        "INSERT INTO services (company_id, name, price, duration, category, description) VALUES (?,?,?,?,?,?)",
+        (company_id, name, price, duration, category, description),
+    )
     conn.commit()
     conn.close()
 
 
-def get_services(company_id) -> pd.DataFrame:
+def get_services(company_id: int) -> pd.DataFrame:
     conn = sqlite3.connect(DB_NAME)
     df = pd.read_sql_query(
-        "SELECT id, name, price, duration, category, description FROM services WHERE company_id = ? ORDER BY category, name",
-        conn, params=(company_id,))
+        "SELECT * FROM services WHERE company_id = ? ORDER BY category, name",
+        conn,
+        params=(company_id,),
+    )
     conn.close()
     return df
 
 
-# ---------- Availability ----------
-def add_availability(company_id, day, start_time, end_time):
+def update_service(service_id: int, name: str, price: float, duration: int, category: str, description: str):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("""
-        INSERT INTO availability (company_id, day, start_time, end_time)
-        VALUES (?, ?, ?, ?)
-    """, (company_id, day, start_time, end_time))
+    c.execute(
+        "UPDATE services SET name=?, price=?, duration=?, category=?, description=? WHERE id=?",
+        (name, price, duration, category, description, service_id),
+    )
     conn.commit()
     conn.close()
 
 
-def get_availability(company_id) -> pd.DataFrame:
+def delete_service(service_id: int):
+    """Verwijder service + eventuele ongebruikte booking_items verwijzingen blijven staan als snapshot (met name/price/duration)."""
     conn = sqlite3.connect(DB_NAME)
-    df = pd.read_sql_query("""
-        SELECT id, day, start_time, end_time
-          FROM availability
-         WHERE company_id = ?
-         ORDER BY
-           CASE day
-             WHEN 'Maandag' THEN 1 WHEN 'Dinsdag' THEN 2 WHEN 'Woensdag' THEN 3
-             WHEN 'Donderdag' THEN 4 WHEN 'Vrijdag' THEN 5 WHEN 'Zaterdag' THEN 6
-             WHEN 'Zondag' THEN 7 ELSE 8
-           END
-    """, conn, params=(company_id,))
+    c = conn.cursor()
+    c.execute("DELETE FROM services WHERE id = ?", (service_id,))
+    conn.commit()
+    conn.close()
+
+
+# -------------------------------------------------
+# Availability
+# -------------------------------------------------
+def add_availability(company_id: int, day: str, start_time: str, end_time: str):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO availability (company_id, day, start_time, end_time) VALUES (?,?,?,?)",
+        (company_id, day, start_time, end_time),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_availability(company_id: int) -> pd.DataFrame:
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query(
+        "SELECT * FROM availability WHERE company_id = ?",
+        conn,
+        params=(company_id,),
+    )
     conn.close()
     return df
 
 
-# Weekdag mapping zonder locale() (stabiel op Streamlit Cloud)
-_DUTCH_DAYS = ["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"]
-
-def _weekday_name(date_str: str) -> str:
-    ts = pd.Timestamp(date_str)
-    return _DUTCH_DAYS[ts.dayofweek]
+# -------------------------------------------------
+# Slots helpers (zonder locale gedoe)
+# -------------------------------------------------
+_DUTCH_DAYS = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"]
 
 
-def get_available_slots(company_id, date: str) -> list[str]:
-    """30-min slots gebaseerd op eerste regel availability voor die dag (simpel)."""
+def _dayname_nl(date_str: str) -> str:
+    dt = datetime.strptime(date_str, "%Y-%m-%d").date()
+    return _DUTCH_DAYS[dt.weekday()]
+
+
+def _to_dt(date_str: str, hhmm: str) -> datetime:
+    return datetime.combine(datetime.strptime(date_str, "%Y-%m-%d").date(),
+                            dtime.fromisoformat(hhmm))
+
+
+def get_available_slots(company_id: int, date: str, duration_minutes: int = 30, step_minutes: int = 5) -> list[str]:
+    """
+    Eenvoudige slotgenerator: alle slots binnen de beschikbaarheid van die dag,
+    in stappen van 5 min, waarbij het blok 'duration_minutes' in de dag past.
+    (Houdt geen rekening met bestaande boekingen – dat kan later uitgebreid worden.)
+    """
     avail = get_availability(company_id)
     if avail.empty:
         return []
-    day = _weekday_name(date)
-    avail_day = avail[avail["day"] == day]
-    if avail_day.empty:
+
+    dayname = _dayname_nl(date)
+    day_rows = avail[avail["day"] == dayname]
+    if day_rows.empty:
         return []
-    row = avail_day.iloc[0]
-    start = pd.Timestamp(f"{date} {row['start_time']}")
-    end = pd.Timestamp(f"{date} {row['end_time']}")
+
     slots = []
-    cur = start
-    while cur < end:
-        slots.append(cur.strftime("%H:%M"))
-        cur += pd.Timedelta(minutes=30)
-    return slots
+    for _, row in day_rows.iterrows():
+        start_dt = _to_dt(date, row["start_time"])
+        end_dt = _to_dt(date, row["end_time"])
+        cursor = start_dt
+        while cursor + timedelta(minutes=duration_minutes) <= end_dt:
+            slots.append(cursor.strftime("%H:%M"))
+            cursor += timedelta(minutes=step_minutes)
+    return sorted(slots)
 
 
-def get_available_slots_for_duration(company_id, date: str, total_duration_minutes: int) -> list[str]:
-    """Returneer starttijden waar het totale pakket in past."""
-    avail = get_availability(company_id)
-    if avail.empty:
-        return []
-    day = _weekday_name(date)
-    avail_day = avail[avail["day"] == day]
-    if avail_day.empty:
-        return []
-    row = avail_day.iloc[0]
-    start = pd.Timestamp(f"{date} {row['start_time']}")
-    end = pd.Timestamp(f"{date} {row['end_time']}")
-    slots = []
-    cur = start
-    while cur + pd.Timedelta(minutes=total_duration_minutes) <= end:
-        slots.append(cur.strftime("%H:%M"))
-        cur += pd.Timedelta(minutes=15)  # fijner raster voor pakketten
-    return slots
+def get_available_slots_for_duration(company_id: int, date: str, total_minutes: int, step_minutes: int = 5) -> list[str]:
+    """Zelfde als hierboven, maar voor samengestelde duur (som van geselecteerde diensten)."""
+    return get_available_slots(company_id, date, duration_minutes=total_minutes, step_minutes=step_minutes)
 
 
-# ---------- Bookings ----------
-def add_booking_with_items(company_id: int, name: str, phone: str,
-                           service_ids: list[int], date: str, time: str) -> int:
-    """Slaat boeking + items op, berekent total_price."""
-    if not service_ids:
-        raise ValueError("Geen diensten geselecteerd")
-    services = get_services(company_id)
-    pick = services[services["id"].isin(service_ids)]
-    total_price = float(pick["price"].sum()) if not pick.empty else 0.0
+# -------------------------------------------------
+# Bookings
+# -------------------------------------------------
+def add_booking_with_items(company_id: int, customer_name: str, phone: str, date: str, time: str,
+                           items: list[dict]) -> int:
+    """
+    items = [{'service_id': 12, 'name': 'Pedicure Basic', 'price': 28.0, 'duration': 30}, ...]
+    Slaat een snapshot van de items op zodat latere naams-/prijswijzigingen het verleden niet beïnvloeden.
+    """
+    total = sum(float(i.get("price", 0) or 0) for i in items)
+    created_at = datetime.now().isoformat()
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    created_at = datetime.now().isoformat()
     c.execute("""
         INSERT INTO bookings (company_id, name, phone, date, time, total_price, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (company_id, name, phone, date, time, total_price, created_at))
+        VALUES (?,?,?,?,?,?,?)
+    """, (company_id, customer_name, phone, date, time, total, created_at))
     booking_id = c.lastrowid
 
-    for _, s in pick.iterrows():
+    for it in items:
         c.execute("""
             INSERT INTO booking_items (booking_id, service_id, name, price, duration)
-            VALUES (?, ?, ?, ?, ?)
-        """, (booking_id, int(s["id"]), s["name"], float(s["price"]), int(s["duration"])))
+            VALUES (?,?,?,?,?)
+        """, (
+            booking_id,
+            it.get("service_id"),
+            it.get("name"),
+            float(it.get("price", 0) or 0),
+            int(it.get("duration", 0) or 0),
+        ))
 
     conn.commit()
     conn.close()
     return booking_id
 
 
+def get_bookings(company_id: int) -> pd.DataFrame:
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query(
+        "SELECT * FROM bookings WHERE company_id = ? ORDER BY date DESC, time DESC, id DESC",
+        conn,
+        params=(company_id,),
+    )
+    conn.close()
+    return df
+
+
 def get_bookings_overview(company_id: int) -> pd.DataFrame:
+    """
+    Overzicht met samengevoegde items. COALESCE voor backwards-compat:
+    gebruikt bi.name als die bestaat, anders services.name (oude data).
+    """
     conn = sqlite3.connect(DB_NAME)
     df = pd.read_sql_query("""
-        SELECT b.id, b.name, b.phone, b.date, b.time, b.total_price,
-               GROUP_CONCAT(bi.name, ', ') AS items
-          FROM bookings b
-          LEFT JOIN booking_items bi ON bi.booking_id = b.id
-         WHERE b.company_id = ?
-         GROUP BY b.id
-         ORDER BY b.date DESC, b.time DESC, b.id DESC
+        SELECT 
+            b.id,
+            b.name        AS customer_name,
+            b.phone,
+            b.date,
+            b.time,
+            ROUND(b.total_price, 2) AS total_price,
+            GROUP_CONCAT(COALESCE(bi.name, s.name), ', ') AS items
+        FROM bookings b
+        LEFT JOIN booking_items bi ON bi.booking_id = b.id
+        LEFT JOIN services s       ON s.id = bi.service_id
+        WHERE b.company_id = ?
+        GROUP BY b.id
+        ORDER BY b.date DESC, b.time DESC, b.id DESC
     """, conn, params=(company_id,))
     conn.close()
     return df
 
 
-# ---------- Reminder settings ----------
+# -------------------------------------------------
+# Reminder settings (CRUD)
+# -------------------------------------------------
 def get_reminder_settings(company_id: int) -> dict:
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("""
-        SELECT enabled, sms_enabled, whatsapp_enabled, days_before, send_time,
-               same_day_enabled, same_day_minutes_before, tz,
-               template_day_before_sms, template_same_day_sms,
-               template_day_before_wa,  template_same_day_wa
-          FROM reminder_settings WHERE company_id=?
-    """, (company_id,))
+    c.execute("SELECT * FROM reminder_settings WHERE company_id = ?", (company_id,))
     row = c.fetchone()
-    conn.close()
-
     if not row:
-        return {
-            "enabled": 0, "sms_enabled": 1, "whatsapp_enabled": 0,
-            "days_before": 1, "send_time": "09:00",
-            "same_day_enabled": 0, "same_day_minutes_before": 120,
-            "tz": "Europe/Brussels",
-            "template_day_before_sms": "Herinnering: je afspraak bij {company} op {date} om {time}.",
-            "template_same_day_sms":  "Tot straks! Je afspraak is om {time} bij {company}.",
-            "template_day_before_wa":  "Herinnering (WhatsApp): {company} – {date} {time}.",
-            "template_same_day_wa":   "WhatsApp: je afspraak is om {time} bij {company}.",
-        }
+        # standaard record aanmaken
+        c.execute("""
+            INSERT INTO reminder_settings (company_id, enabled, sms_enabled, whatsapp_enabled,
+                                           days_before, send_time, same_day_enabled, same_day_minutes_before, tz)
+            VALUES (?,?,?,?,?,?,?,?,?)
+        """, (company_id, 0, 1, 0, 1, "09:00", 0, 60, "Europe/Brussels"))
+        conn.commit()
+        c.execute("SELECT * FROM reminder_settings WHERE company_id = ?", (company_id,))
+        row = c.fetchone()
 
-    keys = [
-        "enabled", "sms_enabled", "whatsapp_enabled", "days_before", "send_time",
-        "same_day_enabled", "same_day_minutes_before", "tz",
-        "template_day_before_sms", "template_same_day_sms",
-        "template_day_before_wa",  "template_same_day_wa"
-    ]
-    return dict(zip(keys, row))
+    # kolomnamen ophalen voor nette dict
+    cols = [d[0] for d in c.description]
+    conn.close()
+    return dict(zip(cols, row))
 
 
-def save_reminder_settings(
-    company_id: int, enabled: int, sms_enabled: int, whatsapp_enabled: int,
-    days_before: int, send_time: str, same_day_enabled: int,
-    same_day_minutes_before: int, tz: str,
-    template_day_before_sms: str, template_same_day_sms: str,
-    template_day_before_wa: str, template_same_day_wa: str
+def upsert_reminder_settings(
+    company_id: int,
+    enabled: int,
+    sms_enabled: int,
+    whatsapp_enabled: int,
+    days_before: int,
+    send_time: str,
+    same_day_enabled: int,
+    same_day_minutes_before: int,
+    tz: str,
+    template_day_before_sms: str = None,
+    template_same_day_sms: str = None,
+    template_day_before_wa: str = None,
+    template_same_day_wa: str = None,
 ):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("""
-        INSERT INTO reminder_settings (
-            company_id, enabled, sms_enabled, whatsapp_enabled,
-            days_before, send_time, same_day_enabled, same_day_minutes_before, tz,
-            template_day_before_sms, template_same_day_sms,
-            template_day_before_wa,  template_same_day_wa
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(company_id) DO UPDATE SET
-            enabled=excluded.enabled,
-            sms_enabled=excluded.sms_enabled,
-            whatsapp_enabled=excluded.whatsapp_enabled,
-            days_before=excluded.days_before,
-            send_time=excluded.send_time,
-            same_day_enabled=excluded.same_day_enabled,
-            same_day_minutes_before=excluded.same_day_minutes_before,
-            tz=excluded.tz,
-            template_day_before_sms=excluded.template_day_before_sms,
-            template_same_day_sms=excluded.template_same_day_sms,
-            template_day_before_wa=excluded.template_day_before_wa,
-            template_same_day_wa=excluded.template_same_day_wa
-    """, (
-        company_id, enabled, sms_enabled, whatsapp_enabled,
-        days_before, send_time, same_day_enabled, same_day_minutes_before, tz,
-        template_day_before_sms, template_same_day_sms,
-        template_day_before_wa,  template_same_day_wa
-    ))
+    # bestaat record?
+    c.execute("SELECT id FROM reminder_settings WHERE company_id = ?", (company_id,))
+    row = c.fetchone()
+    if row:
+        c.execute("""
+            UPDATE reminder_settings
+               SET enabled=?, sms_enabled=?, whatsapp_enabled=?, days_before=?, send_time=?,
+                   same_day_enabled=?, same_day_minutes_before=?, tz=?,
+                   template_day_before_sms=?, template_same_day_sms=?,
+                   template_day_before_wa=?,  template_same_day_wa=?
+             WHERE company_id=?
+        """, (enabled, sms_enabled, whatsapp_enabled, days_before, send_time,
+              same_day_enabled, same_day_minutes_before, tz,
+              template_day_before_sms, template_same_day_sms,
+              template_day_before_wa, template_same_day_wa,
+              company_id))
+    else:
+        c.execute("""
+            INSERT INTO reminder_settings
+                (company_id, enabled, sms_enabled, whatsapp_enabled, days_before, send_time,
+                 same_day_enabled, same_day_minutes_before, tz,
+                 template_day_before_sms, template_same_day_sms,
+                 template_day_before_wa, template_same_day_wa)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (company_id, enabled, sms_enabled, whatsapp_enabled, days_before, send_time,
+              same_day_enabled, same_day_minutes_before, tz,
+              template_day_before_sms, template_same_day_sms,
+              template_day_before_wa, template_same_day_wa))
     conn.commit()
     conn.close()
