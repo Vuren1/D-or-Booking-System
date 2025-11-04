@@ -4,18 +4,11 @@ import pandas as pd
 from datetime import datetime
 
 from database import (
-    init_db,
-    # companies
-    add_company, get_company_by_email, get_company_by_id,
-    is_company_paid, update_company_paid,
-    # categories
+    init_db, add_company, get_company_by_email, is_company_paid, update_company_paid,
     upsert_category, get_categories, get_category_description,
-    # services
-    add_service, get_services, get_service_categories, get_services_by_ids,
-    # availability & slots
+    add_service, get_services, update_service, delete_service,
     add_availability, get_availability,
     get_available_slots, get_available_slots_for_duration,
-    # bookings
     add_booking_with_items, get_bookings_overview,
 )
 
