@@ -11,7 +11,7 @@ from database import (
     # init & companies
     init_db, add_company, get_company_by_email, is_company_paid, update_company_paid,
     # categories & services
-    upsert_category, get_categories, get_category_description,
+    add_category, get_categories, update_category, delete_category,
     add_service, get_services, update_service, delete_service,
     # availability
     add_availability, get_availability,
@@ -19,7 +19,7 @@ from database import (
     # bookings
     add_booking_with_items, get_bookings_overview,
     # reminders
-    get_reminder_settings, save_reminder_settings,
+    get_reminder_settings, upsert_reminder_settings,
 )
 
 from payment import (
