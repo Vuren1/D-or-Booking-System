@@ -3,3 +3,4 @@ pandas
 twilio
 python-dotenv
 stripe  # Voor betaling
+qrcode[pil]
