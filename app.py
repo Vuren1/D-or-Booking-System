@@ -19,6 +19,13 @@ from database import (
     add_booking_with_items, get_bookings_overview,
 )
 
+# Optioneel (als je ze hebt toegevoegd in database.py)
+try:
+    from database import update_service, delete_service
+except Exception:
+    update_service = None
+    delete_service = None
+
 from payment import create_checkout_session, check_payment
 from twilio_sms import send_sms
 
@@ -29,22 +36,27 @@ from twilio_sms import send_sms
 st.set_page_config(page_title="D'or Booking System", layout="wide")
 init_db()
 
-# Klein beetje styling (goudaccenten + titels)
+# Styling
 st.markdown("""
 <style>
-.block-title {font-weight:700;font-size:22px;margin:8px 0 10px 0;color:#FFD166;}
 .big-title {font-weight:800;font-size:38px;text-align:center;color:#FFD166;margin:8px 0 26px 0;}
+.block-title {font-weight:700;font-size:22px;margin:8px 0 10px 0;color:#FFD166;}
 .caption-muted {color:#b8b8b8;}
+.expander > div > div {padding-top:4px;padding-bottom:8px;}
+.service-row {padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.03);margin:4px 0;}
+.service-label {font-size:16px;font-weight:600;}
+.service-desc {color:#b8b8b8;margin-left:6px;}
 </style>
 """, unsafe_allow_html=True)
 
-# Query parameters voor Stripe en publieke klantpagina
+# Query parameters
 query = st.experimental_get_query_params()
 session_id = query.get("session_id", [None])[0]
 company_id_param = query.get("company", [None])[0]
 
+
 # -----------------------------
-# 1️⃣ REGISTRATIE & LOGIN
+# 1) REGISTRATIE & LOGIN
 # -----------------------------
 if "logged_in" not in st.session_state and not company_id_param:
     st.title("D'or Booking System")
@@ -90,23 +102,21 @@ if "logged_in" not in st.session_state and not company_id_param:
                 st.error("Onjuiste gegevens.")
 
 # -----------------------------
-# 2️⃣ DASHBOARD (voor bedrijven)
+# 2) DASHBOARD
 # -----------------------------
 elif "logged_in" in st.session_state and not company_id_param:
     company_id = st.session_state.company_id
     company_name = st.session_state.company_name
 
-    # Als je net terugkomt van Stripe: check betaling → activeer
+    # Terug van Stripe?
     if session_id and check_payment(session_id):
         update_company_paid(company_id)
         st.success("✅ Betaling gelukt! Dashboard geactiveerd.")
         st.rerun()
 
-    # Betaald?
     if not is_company_paid(company_id):
         st.error("Je account is nog niet actief. Betaal om toegang te krijgen tot het dashboard.")
         try:
-            # fallback: haal e-mail op uit DB
             email = get_company_by_id(company_id)[2]
             checkout_url = create_checkout_session(company_id, email, company_name)
             st.markdown(f"[💳 Betaal hier (€25/maand)]({checkout_url})")
@@ -114,10 +124,8 @@ elif "logged_in" in st.session_state and not company_id_param:
             st.warning(f"Stripe error: {e}")
         st.stop()
 
-    # Titel
     st.markdown(f"<div class='big-title'>Welkom, {company_name}</div>", unsafe_allow_html=True)
 
-    # Tabs (met afspraken-overzicht)
     tab_dash, tab_services, tab_avail, tab_preview, tab_bookings = st.tabs(
         ["🏠 Overzicht", "💅 Diensten", "🕒 Beschikbaarheid", "👀 Klant-preview", "📋 Afspraken"]
     )
@@ -130,14 +138,14 @@ elif "logged_in" in st.session_state and not company_id_param:
             <div style='background-color:#333;padding:20px;border-radius:10px;color:white;'>
             <b>Welkom in je D'or dashboard!</b><br>
             Voeg hieronder je diensten (met beschrijving), categorieën (met beschrijving) en beschikbaarheid toe. 
-            Alles wat je instelt wordt zichtbaar op je publieke boekingspagina.
+            Je klanten zien deze indeling ingeklapt per categorie. Checkboxen staan rechts van elke dienst.
             </div>
             """,
             unsafe_allow_html=True,
         )
 
     # -------------------
-    # 💅 DIENSTEN (met beschrijving + categorie-beschrijving)
+    # 💅 DIENSTEN (add + edit + delete)
     with tab_services:
         st.markdown("<div class='block-title'>Diensten</div>", unsafe_allow_html=True)
 
@@ -145,15 +153,16 @@ elif "logged_in" in st.session_state and not company_id_param:
         cat_desc_map = {row["name"]: row.get("description", "") for _, row in cats_df.iterrows()}
         existing_cats = ["Algemeen"] + [c for c in sorted(cat_desc_map.keys()) if c != "Algemeen"]
 
-        col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+        # 1) Toevoegen
         with st.form("add_service_form"):
-            with col1:
+            c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+            with c1:
                 name = st.text_input("Naam", placeholder="Bijv. Pedicure Basic")
-            with col2:
+            with c2:
                 price = st.number_input("Prijs (€)", min_value=0.0, step=0.05, value=0.0)
-            with col3:
+            with c3:
                 duration = st.number_input("Duur (minuten)", min_value=5, step=5, value=30)
-            with col4:
+            with c4:
                 category = st.selectbox("Categorie", options=existing_cats + ["+ Nieuwe categorie..."])
 
             service_desc = st.text_area(
@@ -162,8 +171,7 @@ elif "logged_in" in st.session_state and not company_id_param:
                 height=90,
             )
 
-            # Nieuwe categorie of bestaande (met bewerkbare beschrijving)
-            new_cat = None
+            # Nieuwe of bestaande categorie
             if category == "+ Nieuwe categorie...":
                 new_cat = st.text_input("Nieuwe categorie-naam", placeholder="Bijv. Pedicure Pakket")
                 cat_desc = st.text_area(
@@ -171,7 +179,9 @@ elif "logged_in" in st.session_state and not company_id_param:
                     placeholder="Bijv. Samengestelde pedicure pakketten...",
                     height=80,
                 )
+                final_cat = (new_cat or "Algemeen").strip()
             else:
+                final_cat = category
                 cat_desc = st.text_area(
                     "Categorie-beschrijving (bewerken, optioneel)",
                     value=cat_desc_map.get(category, ""),
@@ -179,20 +189,69 @@ elif "logged_in" in st.session_state and not company_id_param:
                 )
 
             if st.form_submit_button("➕ Toevoegen"):
-                final_cat = (new_cat or category or "Algemeen").strip()
-                # maak/updates categorie
-                upsert_category(company_id, final_cat, cat_desc or "")
-                if name:
-                    add_service(company_id, name, price, duration, final_cat, service_desc)
+                if not name.strip():
+                    st.warning("Vul een naam in.")
+                else:
+                    upsert_category(company_id, final_cat, cat_desc or "")
+                    add_service(company_id, name.strip(), price, int(duration), final_cat, service_desc.strip())
                     st.success("Dienst toegevoegd.")
                     st.rerun()
-                else:
-                    st.warning("Vul een naam in.")
 
         services_df = get_services(company_id)
+
+        # 2) Bewerken / Verwijderen
+        st.markdown("### Bewerken of verwijderen")
         if services_df.empty:
             st.info("Nog geen diensten.")
         else:
+            id_to_label = {int(r["id"]): f'{r["name"]}  (cat: {r["category"]})' for _, r in services_df.iterrows()}
+            sel_id = st.selectbox("Kies dienst", options=list(id_to_label.keys()), format_func=lambda i: id_to_label[i])
+
+            row = services_df[services_df["id"] == sel_id].iloc[0]
+            with st.form("edit_service_form"):
+                ec1, ec2, ec3, ec4 = st.columns([2, 1, 1, 1])
+                with ec1:
+                    e_name = st.text_input("Naam", value=row["name"])
+                with ec2:
+                    e_price = st.number_input("Prijs (€)", min_value=0.0, step=0.05, value=float(row["price"]))
+                with ec3:
+                    e_duration = st.number_input("Duur (minuten)", min_value=5, step=5, value=int(row["duration"]))
+                with ec4:
+                    e_category = st.selectbox("Categorie", options=existing_cats + ["+ Nieuwe categorie..."], index=existing_cats.index(row["category"]) if row["category"] in existing_cats else len(existing_cats))
+
+                e_desc = st.text_area("Beschrijving (dienst)", value=row.get("description", "") or "", height=90)
+
+                # Categorie-beschrijving
+                if e_category == "+ Nieuwe categorie...":
+                    e_new_cat = st.text_input("Nieuwe categorie-naam", placeholder="Nieuwe categorie")
+                    e_cat_desc = st.text_area("Categorie-beschrijving", value="", height=80)
+                    e_final_cat = e_new_cat.strip() or "Algemeen"
+                else:
+                    e_final_cat = e_category
+                    e_cat_desc = st.text_area("Categorie-beschrijving", value=cat_desc_map.get(e_category, ""), height=80)
+
+                update_btn, delete_btn = st.columns([1,1])
+                do_update = update_btn.form_submit_button("💾 Opslaan")
+                do_delete = delete_btn.form_submit_button("🗑 Verwijderen")
+
+            if do_update:
+                if update_service is None:
+                    st.error("update_service ontbreekt in database.py")
+                else:
+                    upsert_category(company_id, e_final_cat, e_cat_desc or "")
+                    update_service(sel_id, e_name.strip(), float(e_price), int(e_duration), e_final_cat, e_desc.strip())
+                    st.success("Dienst bijgewerkt.")
+                    st.rerun()
+
+            if do_delete:
+                if delete_service is None:
+                    st.error("delete_service ontbreekt in database.py")
+                else:
+                    delete_service(sel_id)
+                    st.success("Dienst verwijderd.")
+                    st.rerun()
+
+            st.markdown("### Alle diensten")
             st.dataframe(
                 services_df[["id", "name", "price", "duration", "category", "description"]],
                 use_container_width=True
@@ -221,7 +280,7 @@ elif "logged_in" in st.session_state and not company_id_param:
             st.dataframe(avail_df, use_container_width=True)
 
     # -------------------
-    # 👀 KLANT-PREVIEW (met categorie/dienst-beschrijvingen)
+    # 👀 KLANT-PREVIEW (ingeklapte categorieën + checkbox rechts)
     with tab_preview:
         st.markdown("<div class='block-title'>Zo ziet je klant het</div>", unsafe_allow_html=True)
         services = get_services(company_id)
@@ -233,22 +292,24 @@ elif "logged_in" in st.session_state and not company_id_param:
         else:
             selected_ids = []
             for cat in services["category"].dropna().unique():
-                st.markdown(f"### {cat}")
-                cdesc = cat_desc_map.get(cat, "")
-                if cdesc:
-                    st.caption(cdesc)
+                with st.expander(cat, expanded=False):
+                    cdesc = cat_desc_map.get(cat, "")
+                    if cdesc:
+                        st.caption(cdesc)
 
-                sub = services[services["category"] == cat]
-                for _, row in sub.iterrows():
-                    label = f"{row['name']} — €{row['price']:.2f} • {int(row['duration'])} min"
-                    checked = st.checkbox(label, key=f"pv_{row['id']}")
-                    if row.get("description"):
-                        st.markdown(
-                            f"<div class='caption-muted' style='margin-left:28px'>{row['description']}</div>",
-                            unsafe_allow_html=True,
-                        )
-                    if checked:
-                        selected_ids.append(int(row["id"]))
+                    sub = services[services["category"] == cat]
+                    for _, row in sub.iterrows():
+                        c1, c2 = st.columns([0.92, 0.08])
+                        with c1:
+                            st.markdown(f"<div class='service-row'><div class='service-label'>{row['name']} — €{row['price']:.2f} • {int(row['duration'])} min</div>", unsafe_allow_html=True)
+                            if row.get("description"):
+                                st.markdown(f"<div class='service-desc'>{row['description']}</div></div>", unsafe_allow_html=True)
+                            else:
+                                st.markdown("</div>", unsafe_allow_html=True)
+                        with c2:
+                            checked = st.checkbox("", key=f"pv_{row['id']}")
+                            if checked:
+                                selected_ids.append(int(row["id"]))
 
             if not selected_ids:
                 st.info("Selecteer één of meerdere diensten om te testen.")
@@ -300,7 +361,7 @@ elif "logged_in" in st.session_state and not company_id_param:
         st.rerun()
 
 # -----------------------------
-# 3️⃣ PUBLIEKE KLANTENPAGINA (/?company=...)
+# 3) PUBLIEKE KLANTENPAGINA (/?company=...)
 # -----------------------------
 elif company_id_param:
     try:
@@ -327,23 +388,27 @@ elif company_id_param:
 
     st.subheader("Kies je diensten")
     selected_ids = []
-    for cat in services["category"].dropna().unique():
-        st.markdown(f"### {cat}")
-        cdesc = cat_desc_map.get(cat, "")
-        if cdesc:
-            st.caption(cdesc)
 
-        sub = services[services["category"] == cat]
-        for _, row in sub.iterrows():
-            label = f"{row['name']} — €{row['price']:.2f} • {int(row['duration'])} min"
-            checked = st.checkbox(label, key=f"pub_{row['id']}")
-            if row.get("description"):
-                st.markdown(
-                    f"<div class='caption-muted' style='margin-left:28px'>{row['description']}</div>",
-                    unsafe_allow_html=True,
-                )
-            if checked:
-                selected_ids.append(int(row["id"]))
+    # Ingekapt per categorie + checkbox rechts
+    for cat in services["category"].dropna().unique():
+        with st.expander(cat, expanded=False):
+            cdesc = cat_desc_map.get(cat, "")
+            if cdesc:
+                st.caption(cdesc)
+
+            sub = services[services["category"] == cat]
+            for _, row in sub.iterrows():
+                c1, c2 = st.columns([0.92, 0.08])
+                with c1:
+                    st.markdown(f"<div class='service-row'><div class='service-label'>{row['name']} — €{row['price']:.2f} • {int(row['duration'])} min</div>", unsafe_allow_html=True)
+                    if row.get("description"):
+                        st.markdown(f"<div class='service-desc'>{row['description']}</div></div>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("</div>", unsafe_allow_html=True)
+                with c2:
+                    checked = st.checkbox("", key=f"pub_{row['id']}")
+                    if checked:
+                        selected_ids.append(int(row["id"]))
 
     if not selected_ids:
         st.info("Selecteer één of meerdere diensten hierboven.")
