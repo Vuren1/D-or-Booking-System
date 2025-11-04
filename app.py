@@ -225,47 +225,55 @@ if st.session_state.get("logged_in"):
 
         # ------------------- KLANT-PREVIEW --------------------
         with tab_preview:
-            st.markdown("<div class='block-title'>Zo ziet je klant het</div>", unsafe_allow_html=True)
+    st.markdown("<div class='block-title'>Zo ziet je klant het</div>", unsafe_allow_html=True)
 
-            services = get_services(company_id)
-            if services.empty:
-                st.info("Voeg eerst een dienst toe in tab 'Diensten'.")
-            else:
-                s_name = st.selectbox("Dienst", services["name"].tolist())
-                s_row = services[services["name"] == s_name].iloc[0]
-                st.write(f"💶 **Prijs:** €{s_row['price']:.2f} | 🕒 **Duur:** {int(s_row['duration'])} min")
-
-                date = st.date_input("Datum", min_value=pd.Timestamp.today())
-                slots = get_available_slots(company_id, str(date))
-                if not slots:
-                    st.warning("Geen beschikbare tijden op deze dag.")
-                else:
-                    time = st.selectbox("Tijd", slots)
-                    cname = st.text_input("Jouw naam", placeholder="Voornaam Achternaam")
-                    cphone = st.text_input("Telefoon (met +)", placeholder="+316...")
-                    if st.button("📩 Boek (test)"):
-                        if not cname or not cphone.startswith("+"):
-                            st.error("Vul naam in en een geldig telefoonnummer met +.")
-                        else:
-                            add_booking(company_id, cname, cphone, int(s_row["id"]), str(date), time)
-                            try:
-                                send_sms(cphone, f"Beste {cname}, je afspraak bij {company_name} is bevestigd op {date} om {time}.")
-                            except Exception:
-                                pass
-                            st.success("Boeking opgeslagen (test).")
-
-        st.divider()
-        if st.button("Uitloggen"):
-            st.session_state.clear()
-            st.rerun()
-
+    services = get_services(company_id)
+    if services.empty:
+        st.info("Voeg eerst een dienst toe in tab 'Diensten'.")
     else:
-        st.warning("Je account is nog niet actief. Betaal om toegang te krijgen tot het dashboard.")
-        pay_url = create_checkout_session(company_id, company_email, company_name)
-        if pay_url:
-            st.markdown(f"[Klik hier om te betalen (€25/maand)]({pay_url})")
+        # Groepeer per categorie en toon checkboxes
+        selected_ids = []
+        for cat in services["category"].dropna().unique():
+            st.markdown(f"**{cat}**")
+            sub = services[services["category"] == cat]
+            for _, row in sub.iterrows():
+                checked = st.checkbox(f"{row['name']} — €{row['price']:.2f} • {int(row['duration'])} min",
+                                      key=f"pv_{row['id']}")
+                if checked:
+                    selected_ids.append(int(row["id"]))
 
-elif company_id_param:
+        if not selected_ids:
+            st.info("Selecteer één of meerdere diensten hierboven.")
+            st.stop()
+
+        # Totals
+        sel_df = services[services["id"].isin(selected_ids)]
+        total_price = float(sel_df["price"].sum())
+        total_duration = int(sel_df["duration"].sum())
+        st.write(f"**Totaal:** €{total_price:.2f} — {total_duration} min")
+
+        date = st.date_input("Datum", min_value=pd.Timestamp.today())
+        slots = get_available_slots_for_duration(company_id, str(date), total_duration)
+        if not slots:
+            st.warning("Geen tijdslots beschikbaar voor deze totaalduur op deze dag.")
+            st.stop()
+        time = st.selectbox("Tijd", slots)
+
+        cname = st.text_input("Jouw naam", placeholder="Voornaam Achternaam")
+        cphone = st.text_input("Telefoon (met +)", placeholder="+316...")
+
+        if st.button("📩 Boek (test, meerdere diensten)"):
+            if not cname or not cphone.startswith("+"):
+                st.error("Vul naam in en een geldig telefoonnummer met +.")
+            else:
+                booking_id = add_booking_with_items(company_id, cname, cphone, selected_ids, str(date), time)
+                try:
+                    names = ", ".join(sel_df["name"].tolist())
+                    send_sms(cphone, f"Beste {cname}, je afspraak bij {company_name} is bevestigd op {date} om {time} — {names}.")
+                except Exception:
+                    pass
+                st.success(f"Boeking #{booking_id} opgeslagen (test).")
+
     # ============ PUBLIEKE KLANTEN-BOEKINGSPAGINA ============
     info = get_company_by_id(company_id_param)
     company_title = info[1] if info else f"Bedrijf #{company_id_param}"
