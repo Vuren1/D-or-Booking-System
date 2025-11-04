@@ -164,32 +164,39 @@ if st.session_state.get("logged_in"):
 
         # ---------------------- DIENSTEN -----------------------
         with tab_services:
-            st.markdown("<div class='block-title'>Diensten</div>", unsafe_allow_html=True)
-            with st.form("add_service_form"):
-                s1, s2, s3 = st.columns([2,1,1])
-                with s1:
-                    name = st.text_input("Naam", placeholder="Bijv. Voetmassage", label_visibility="collapsed")
-                with s2:
-                    price = st.number_input("Prijs (€)", min_value=0.0, step=0.05, value=0.0, label_visibility="collapsed")
-                with s3:
-                    # min 5 minuten zoals gevraagd
-                    duration = st.number_input("Duur (minuten)", min_value=5, step=5, value=30, label_visibility="collapsed")
-                if st.form_submit_button("➕ Toevoegen"):
-                    if name:
-                        add_service(company_id, name, price, duration)
-                        st.success("Dienst toegevoegd.")
-                        st.rerun()
-                    else:
-                        st.warning("Vul een naam in.")
+    st.markdown("<div class='block-title'>Diensten</div>", unsafe_allow_html=True)
 
-            services_df = get_services(company_id)
-            if services_df.empty:
-                st.info("Nog geen diensten.")
+    # bestaande categorieën (vrijetekst), bedrijf kan nieuwe typen
+    existing_cats = ["Algemeen"] + [c for c in get_service_categories(company_id) if c and c != "Algemeen"]
+    col1, col2, col3, col4 = st.columns([2,1,1,1])
+    with st.form("add_service_form"):
+        with col1:
+            name = st.text_input("Naam", placeholder="Bijv. Voetmassage")
+        with col2:
+            price = st.number_input("Prijs (€)", min_value=0.0, step=0.05, value=0.0)
+        with col3:
+            duration = st.number_input("Duur (minuten)", min_value=5, step=5, value=30)
+        with col4:
+            category = st.selectbox("Categorie", options=existing_cats + ["+ Nieuwe categorie..."])
+        new_cat = None
+        if category == "+ Nieuwe categorie...":
+            new_cat = st.text_input("Nieuwe categorie", placeholder="Bijv. Nagels")
+        if st.form_submit_button("➕ Toevoegen"):
+            final_cat = (new_cat or category or "Algemeen").strip()
+            if name:
+                add_service(company_id, name, price, duration, final_cat)
+                st.success("Dienst toegevoegd.")
+                st.rerun()
             else:
-                st.dataframe(services_df[["id","name","price","duration"]], use_container_width=True)
-                if st.button("💾 Alles opslaan (Diensten)"):
-                    # Waarden worden al opgeslagen bij toevoegen; deze knop is puur feedback/consistentie
-                    st.success("Diensten zijn up-to-date.")
+                st.warning("Vul een naam in.")
+
+    services_df = get_services(company_id)
+    if services_df.empty:
+        st.info("Nog geen diensten.")
+    else:
+        st.dataframe(services_df[["id","name","price","duration","category"]], use_container_width=True)
+        if st.button("💾 Alles opslaan (Diensten)"):
+            st.success("Diensten zijn up-to-date.")
 
         # ------------------ BESCHIKBAARHEID -------------------
         with tab_avail:
