@@ -195,33 +195,45 @@ def get_bookings(company_id: int) -> pd.DataFrame:
     return df
 
 def get_available_slots(company_id: int, date: str) -> list[str]:
-    """Eenvoudige slot-generator: pakt de eerste beschikbare regel voor die dagnaam en maakt 30-min slots."""
+    """
+    Maakt 30-minuten-slots voor de gekozen datum.
+    Zoekt eerst naar beschikbaarheid met de NL-dagnaam (Maandag, ...).
+    Gebruik geen locale op de server om errors te voorkomen.
+    """
     avail = get_availability(company_id)
     if avail.empty:
         return []
 
-    # Kies de rij met de juiste dag als die bestaat, anders eerste rij
-    day_name = pd.Timestamp(date).day_name(locale='nl_BE') if hasattr(pd.Series, 'str') else pd.Timestamp(date).day_name()
-    # Map Engelstalige day_name naar NL-lijst indien nodig
-    nl_days = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
-    map_days = dict(zip(nl_days, ["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"]))
-    target_day = map_days.get(day_name, day_name)
+    # Bepaal dagnaam in het Engels en map naar NL (zonder locale afhankelijkheid)
+    eng_day = pd.Timestamp(date).day_name()  # bv. 'Monday'
+    eng_to_nl = {
+        "Monday": "Maandag",
+        "Tuesday": "Dinsdag",
+        "Wednesday": "Woensdag",
+        "Thursday": "Donderdag",
+        "Friday": "Vrijdag",
+        "Saturday": "Zaterdag",
+        "Sunday": "Zondag",
+    }
+    target_day = eng_to_nl.get(eng_day, eng_day)
 
+    # Zoek beschikbaarheid voor die dag; anders fallback naar eerste rij
     row = None
     if "day" in avail.columns:
-        m = avail[avail["day"] == target_day]
-        if not m.empty:
-            row = m.iloc[0]
+        match = avail[avail["day"] == target_day]
+        if not match.empty:
+            row = match.iloc[0]
     if row is None:
         row = avail.iloc[0]
 
+    # Bouw tijdslots
     start = pd.Timestamp(f"{date} {row['start_time']}")
-    end   = pd.Timestamp(f"{date} {row['end_time']}")
+    end = pd.Timestamp(f"{date} {row['end_time']}")
     slots = []
     cur = start
     while cur < end:
         slots.append(cur.strftime("%H:%M"))
-        cur += pd.Timedelta(minutes=30)
+        cur += pd.Timedelta(minutes=30)  # pas aan indien je andere slotgrootte wil
     return slots
 
 # ---------- SMS settings (optioneel) ----------
