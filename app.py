@@ -9,18 +9,16 @@ from database import (
     add_service, get_services,
     add_availability, get_availability,
     add_booking, get_available_slots,
-    update_sms_settings
 )
 from twilio_sms import send_sms
 
-# Probeer ook de helper te importeren; zo niet, hebben we een lokale fallback
+# Probeer hulpfuncties uit payment te importeren
 try:
     from payment import create_checkout_session, check_payment, get_company_id_from_session
 except Exception:
     from payment import create_checkout_session, check_payment
-
     def get_company_id_from_session(session_id: str):
-        """Fallback: haal company_id uit Stripe metadata als helper niet bestaat."""
+        # Fallback rechtstreeks via Stripe
         try:
             import stripe
             sk = os.getenv("STRIPE_SECRET_KEY") or st.secrets["STRIPE_SECRET_KEY"]
@@ -32,15 +30,25 @@ except Exception:
             return None
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# INIT & BASIS UI
-# ──────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────
+# Init
+# ─────────────────────────────────────────
 init_db()
 st.set_page_config(page_title="D'or Booking System", layout="centered")
 st.title("D'or Booking System")
 
-# Zorg dat de logo-map bestaat (voor optionele upload)
+# Zorg dat logo-map bestaat (optioneel)
 os.makedirs("data/logos", exist_ok=True)
+
+# Stijl (goud/donker)
+st.markdown("""
+<style>
+:root { --gold:#FFD166; }
+.block-title { color:var(--gold); font-weight:700; font-size:1.2rem; margin:8px 0 4px; }
+.box { border:1px solid #1e3a26; border-radius:16px; padding:16px; background:#0f1f14; }
+.label { color:#cfe3d5; font-size:0.9rem; }
+</style>
+""", unsafe_allow_html=True)
 
 # Query params
 qp = st.experimental_get_query_params()
@@ -52,7 +60,6 @@ except Exception:
     company_id_param = None
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # ───────────────── Auto-activate & auto-login na Stripe ─────────────────
 if session_id and "logged_in" not in st.session_state:
     # 1) Probeer company uit de URL
@@ -61,7 +68,6 @@ if session_id and "logged_in" not in st.session_state:
     # 2) Anders: haal company_id uit Stripe metadata
     if not cid:
         try:
-            from payment import get_company_id_from_session  # als je helper hebt
             cid = get_company_id_from_session(session_id)
         except Exception:
             cid = None
@@ -69,12 +75,11 @@ if session_id and "logged_in" not in st.session_state:
     # 3) Als we het nog niet weten: haal e-mail uit Stripe sessie en zoek in DB
     if not cid:
         try:
-            import stripe, os
+            import stripe
             sk = os.getenv("STRIPE_SECRET_KEY") or st.secrets["STRIPE_SECRET_KEY"]
             stripe.api_key = sk
             s = stripe.checkout.Session.retrieve(session_id, expand=["customer_details"])
             email = None
-            # bron kan variëren:
             if getattr(s, "customer_details", None) and s.customer_details.email:
                 email = s.customer_details.email
             elif getattr(s, "customer_email", None):
@@ -82,48 +87,44 @@ if session_id and "logged_in" not in st.session_state:
             if email:
                 rec = get_company_by_email(email)
                 if rec:
-                    cid = rec[0]  # id
+                    cid = rec[0]
         except Exception:
             pass
 
-    # 4) Als we een company_id hebben én de betaling is OK -> login + activate
+    # 4) Log in & activeer
     if cid and check_payment(session_id):
         info = get_company_by_id(cid)
         update_company_paid(cid)
         st.session_state.logged_in = True
         st.session_state.company_id = cid
         st.session_state.company_name = info[1] if info else f"Bedrijf #{cid}"
-        # Zet de company ook zichtbaar in de URL (fijn voor refresh/links)
+        # Zet company ook in de URL (handig bij refresh/delen)
         st.experimental_set_query_params(company=cid)
         st.success("✅ Betaling bevestigd. Je account is nu geactiveerd en je bent ingelogd.")
         st.rerun()
     else:
-        # Laat iets zien dat helpt debuggen i.p.v. stil blijven staan
         st.info("✅ Betaling bevestigd. Je wordt zo doorgestuurd…")
-        st.caption("Tip: als dit scherm blijft staan, controleer of de success_url in payment.py de parameter &company=<id> bevat.")
+        st.caption("Blijft dit scherm staan? Controleer of de success_url &company=<id> bevat in payment.py.")
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# ROUTING: 1) Dashboard (ingelogd) → 2) Publieke boekingspagina (?company=) → 3) Landing (registratie/login)
-# ──────────────────────────────────────────────────────────────────────────────
+# ───────────────── ROUTING ─────────────────
 if st.session_state.get("logged_in"):
     # ============ DASHBOARD ============
     company_id = st.session_state["company_id"]
     company_name = st.session_state.get("company_name", f"Bedrijf #{company_id}")
-    company_rec = get_company_by_id(company_id)  # (id, name, email, password, paid, created_at)
+    company_rec = get_company_by_id(company_id)
     company_email = company_rec[2] if company_rec else ""
 
-    # Als iemand alsnog met session_id binnenkomt, dubbelcheck
+    # Hercontrole als er toch nog een session_id hing
     if session_id and check_payment(session_id):
         update_company_paid(company_id)
         st.success("✅ Betaling bevestigd.")
         st.rerun()
 
-    # Actieve klant?
     if is_company_paid(company_id):
         st.header(f"Dashboard – {company_name}")
 
-        # Optioneel bedrijfslogo tonen (uit data/logos/company_<id>.png)
+        # Optioneel: bedrijfslogo
         logo_path = f"data/logos/company_{company_id}.png"
         with st.expander("🏷️ Bedrijfsprofiel"):
             c1, c2 = st.columns([1, 2])
@@ -132,7 +133,6 @@ if st.session_state.get("logged_in"):
                     st.image(logo_path, caption="Huidig logo", use_column_width=True)
                 uploaded = st.file_uploader("Upload nieuw logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
                 if uploaded is not None:
-                    # Sla op als PNG
                     from PIL import Image
                     img = Image.open(uploaded).convert("RGBA")
                     img.save(logo_path)
@@ -141,69 +141,111 @@ if st.session_state.get("logged_in"):
             with c2:
                 st.write(f"**Bedrijfsnaam:** {company_name}")
                 st.write(f"**E-mail:** {company_email}")
-                st.caption("Logo wordt lokaal opgeslagen in `data/logos/` (geen DB-kolom nodig).")
 
         st.divider()
 
-        # ── Diensten
-        st.subheader("Diensten")
-        with st.form("add_service"):
-            name = st.text_input("Naam")
-            price = st.number_input("Prijs (€)", min_value=0.0, step=1.0)
-            duration = st.number_input("Duur (minuten)", min_value=15, step=5)
-            if st.form_submit_button("Toevoegen") and name:
-                add_service(company_id, name, price, duration)
-                st.success("Dienst toegevoegd.")
-                st.rerun()
+        # ====== TABS ======
+        tab_dash, tab_services, tab_avail, tab_preview = st.tabs(
+            ["🏠 Overzicht", "💅 Diensten", "🕒 Beschikbaarheid", "👀 Klant-preview"]
+        )
 
-        services_df = get_services(company_id)
-        if not services_df.empty:
-            st.dataframe(services_df[["name", "price", "duration"]])
-        else:
-            st.info("Nog geen diensten toegevoegd.")
-
-        # ── Beschikbaarheid
-        st.subheader("Beschikbaarheid")
-        with st.form("add_availability"):
-            day = st.selectbox("Dag", ["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"])
-            c1, c2 = st.columns(2)
-            with c1:
-                start = st.time_input("Van", value=pd.Timestamp("09:00").time())
-            with c2:
-                end = st.time_input("Tot", value=pd.Timestamp("17:00").time())
-            if st.form_submit_button("Opslaan"):
-                add_availability(company_id, day, str(start), str(end))
-                st.success("Beschikbaarheid opgeslagen.")
-                st.rerun()
-
-        avail_df = get_availability(company_id)
-        if not avail_df.empty:
-            st.dataframe(avail_df[["day", "start_time", "end_time"]])
-        else:
-            st.info("Nog geen beschikbaarheid ingesteld.")
-
-        # ── 🟡 ONBOARDING: toon wizard als er nog géén dienst of beschikbaarheid is
-        needs_onboarding = services_df.empty or avail_df.empty
-        if needs_onboarding:
+        # ---------------------- OVERZICHT ----------------------
+        with tab_dash:
+            st.markdown("<div class='block-title'>Welkom!</div>", unsafe_allow_html=True)
+            st.write("Vul je diensten en beschikbaarheid in. Gebruik de tabs hierboven.")
             st.markdown(
-                """
-                <div style="background:#0f1f14;border:1px solid #1e3a26;border-radius:16px;padding:24px;margin-top:10px">
-                  <h3 style="color:#FFD166;margin:0 0 12px 0;">✨ Welkom bij D’or Booking System!</h3>
-                  <p style="color:#cfe3d5">
-                    Je account is actief. Zet nu je bedrijf klaar voor boekingen:
-                    voeg een <b>dienst</b> toe en stel je <b>beschikbaarheid</b> in.
-                  </p>
-                </div>
-                """,
-                unsafe_allow_html=True,
+                f"""
+                **Publieke boekingslink voor klanten**  
+                👉 `?company={company_id}` aan je app-URL toevoegen  
+                Voorbeeld:  
+                `{st.secrets.get("APP_URL", "https://<jouw-app>.streamlit.app")}?company={company_id}`
+                """.strip()
             )
 
-            with st.expander("📱 Optioneel: SMS-herinneringen instellen"):
-                d = st.number_input("Aantal dagen vooraf verzenden", 0, 7, 1, key="sms_days")
-                h = st.number_input("Aantal uren vooraf (zelfde dag)", 0, 12, 2, key="sms_hours")
-                if st.button("Instellingen opslaan", key="save_sms"):
-                    update_sms_settings(company_id, d, h)
-                    st.success("Herinneringsinstellingen opgeslagen.")
+        # ---------------------- DIENSTEN -----------------------
+        with tab_services:
+            st.markdown("<div class='block-title'>Diensten</div>", unsafe_allow_html=True)
+            with st.form("add_service_form"):
+                s1, s2, s3 = st.columns([2,1,1])
+                with s1:
+                    name = st.text_input("Naam", placeholder="Bijv. Voetmassage", label_visibility="collapsed")
+                with s2:
+                    price = st.number_input("Prijs (€)", min_value=0.0, step=0.05, value=0.0, label_visibility="collapsed")
+                with s3:
+                    # min 5 minuten zoals gevraagd
+                    duration = st.number_input("Duur (minuten)", min_value=5, step=5, value=30, label_visibility="collapsed")
+                if st.form_submit_button("➕ Toevoegen"):
+                    if name:
+                        add_service(company_id, name, price, duration)
+                        st.success("Dienst toegevoegd.")
+                        st.rerun()
+                    else:
+                        st.warning("Vul een naam in.")
+
+            services_df = get_services(company_id)
+            if services_df.empty:
+                st.info("Nog geen diensten.")
+            else:
+                st.dataframe(services_df[["id","name","price","duration"]], use_container_width=True)
+                if st.button("💾 Alles opslaan (Diensten)"):
+                    # Waarden worden al opgeslagen bij toevoegen; deze knop is puur feedback/consistentie
+                    st.success("Diensten zijn up-to-date.")
+
+        # ------------------ BESCHIKBAARHEID -------------------
+        with tab_avail:
+            st.markdown("<div class='block-title'>Beschikbaarheid</div>", unsafe_allow_html=True)
+            days = ["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"]
+            with st.form("add_avail_form"):
+                dcol, scol, ecol = st.columns([2,1,1])
+                with dcol:
+                    day = st.selectbox("Dag", days)
+                with scol:
+                    start = st.time_input("Van", pd.Timestamp("09:00").time())
+                with ecol:
+                    end = st.time_input("Tot", pd.Timestamp("17:00").time())
+                if st.form_submit_button("➕ Opslaan"):
+                    add_availability(company_id, day, str(start), str(end))
+                    st.success("Beschikbaarheid toegevoegd.")
+                    st.rerun()
+
+            avail_df = get_availability(company_id)
+            if avail_df.empty:
+                st.info("Nog geen beschikbaarheid.")
+            else:
+                st.dataframe(avail_df[["id","day","start_time","end_time"]], use_container_width=True)
+                if st.button("💾 Alles opslaan (Beschikbaarheid)"):
+                    st.success("Beschikbaarheid is up-to-date.")
+
+        # ------------------- KLANT-PREVIEW --------------------
+        with tab_preview:
+            st.markdown("<div class='block-title'>Zo ziet je klant het</div>", unsafe_allow_html=True)
+
+            services = get_services(company_id)
+            if services.empty:
+                st.info("Voeg eerst een dienst toe in tab 'Diensten'.")
+            else:
+                s_name = st.selectbox("Dienst", services["name"].tolist())
+                s_row = services[services["name"] == s_name].iloc[0]
+                st.write(f"💶 **Prijs:** €{s_row['price']:.2f} | 🕒 **Duur:** {int(s_row['duration'])} min")
+
+                date = st.date_input("Datum", min_value=pd.Timestamp.today())
+                slots = get_available_slots(company_id, str(date))
+                if not slots:
+                    st.warning("Geen beschikbare tijden op deze dag.")
+                else:
+                    time = st.selectbox("Tijd", slots)
+                    cname = st.text_input("Jouw naam", placeholder="Voornaam Achternaam")
+                    cphone = st.text_input("Telefoon (met +)", placeholder="+316...")
+                    if st.button("📩 Boek (test)"):
+                        if not cname or not cphone.startswith("+"):
+                            st.error("Vul naam in en een geldig telefoonnummer met +.")
+                        else:
+                            add_booking(company_id, cname, cphone, int(s_row["id"]), str(date), time)
+                            try:
+                                send_sms(cphone, f"Beste {cname}, je afspraak bij {company_name} is bevestigd op {date} om {time}.")
+                            except Exception:
+                                pass
+                            st.success("Boeking opgeslagen (test).")
 
         st.divider()
         if st.button("Uitloggen"):
