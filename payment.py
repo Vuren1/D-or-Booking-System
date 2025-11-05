@@ -22,6 +22,8 @@ def get_secret(key: str) -> str:
 # 2️⃣  Stripe initialisatie
 # ───────────────────────────────────────────────────────────────
 stripe.api_key = get_secret("STRIPE_SECRET_KEY")
+key = stripe.api_key or ""
+print("Stripe key prefix loaded:", key[:7])  # toont alleen 'rk_test' of 'sk_test'
 
 
 # ───────────────────────────────────────────────────────────────
