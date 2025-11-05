@@ -1,10 +1,17 @@
+from __future__ import annotations  # voorkomt evaluatie van type hints op runtime
 import os
 import sqlite3
+import pandas as pd
 
 DB_NAME = "bookings.db"
 
 def get_connection():
     return sqlite3.connect(DB_NAME, check_same_thread=False)
+
+# --------------------------------------------------------
+# Pad + DB bestand
+# --------------------------------------------------------
+
 
 # -------------------------------------------------
 # Pad + DB bestand
