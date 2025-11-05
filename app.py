@@ -501,26 +501,21 @@ tz = colB.selectbox("Tijdzone", tz_choices, index=tz_choices.index(tz_value) if 
 st.markdown("#### 📄 Sjablonen")
 c1, c2 = st.columns(2)
 
-    tpl_sms_day_before = c1.text_area(
-        "SMS – dag ervoor",
-        value=s.get("template_day_before_sms") or
-              "Herinnering: je afspraak is morgen om {TIME} bij {COMPANY}. Tot dan!"
-    )
-    tpl_sms_same_day = c1.text_area(
-        "SMS – zelfde dag",
-        value=s.get("template_same_day_sms") or
-              "Herinnering: je afspraak is vandaag om {TIME} bij {COMPANY}."
-    )
-    tpl_wa_day_before = c2.text_area(
-        "WhatsApp – dag ervoor",
-        value=s.get("template_day_before_wa") or
-              "Hallo! Morgen om {TIME} zien we je bij {COMPANY}."
-    )
-    tpl_wa_same_day = c2.text_area(
-        "WhatsApp – zelfde dag",
-        value=s.get("template_same_day_wa") or
-              "Tot straks! Je afspraak is vandaag om {TIME} bij {COMPANY}."
-    )
+tpl_sms_day_before = c1.text_area(
+    "SMS – dag ervoor",
+    value=s.get("template_day_before_sms") or "Herinnering: je afspraak is morgen om {TIME} bij {COMPANY}. Tot dan!"
+)
+
+tpl_sms_same_day = c1.text_area(
+    "SMS – zelfde dag",
+    value=s.get("template_same_day_sms") or "Herinnering: je afspraak is vandaag om {TIME} bij {COMPANY}."
+)
+
+tpl_wa_day_before = c2.text_area(
+    "WhatsApp – dag ervoor",
+    value=s.get("template_day_before_wa") or "👋 Hallo! Herinnering: je afspraak is morgen om {TIME} bij {COMPANY}."
+)
+
 
     st.caption("Beschikbare placeholders: {TIME}, {DATE}, {COMPANY}, {NAME} (indien van toepassing).")
 
