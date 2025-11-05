@@ -9,18 +9,14 @@ import qrcode
 from twilio.rest import Client
 
 from database import (
-    # init & companies
-    init_db, add_company, get_company_by_email, is_company_paid, update_company_paid,
-    # categories & services
-    add_category, get_categories, update_category, delete_category,
-    add_service, get_services, update_service, delete_service,
-    # availability
-    add_availability, get_availability,
-    get_available_slots, get_available_slots_for_duration,
-    # bookings
-    add_booking_with_items, get_bookings_overview,
-    # reminders
-    get_reminder_settings, upsert_reminder_settings,
+    get_categories,
+    get_services,
+    add_company,
+    get_company_by_email,
+    get_company,
+    get_reminder_settings,
+    upsert_reminder_settings,
+    ...
 )
 
 from payment import (
