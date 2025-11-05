@@ -1,3 +1,18 @@
+import pandas as pd
+import sqlite3
+
+def get_bookings_overview(company_id):
+    conn = sqlite3.connect("database.db")
+    query = """
+        SELECT id, date, customer_name AS customer, service_name AS service, total_price
+        FROM bookings
+        WHERE company_id = ?
+        ORDER BY date DESC
+    """
+    df = pd.read_sql_query(query, conn, params=(company_id,))
+    conn.close()
+    return df
+
 import datetime as dt
 import io
 from datetime import datetime, date as _date
