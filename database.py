@@ -233,6 +233,38 @@ def get_company_name_by_id(company_id: int) -> str:
     conn.close()
     return row[0] if row else f"bedrijf #{company_id}"
 
+def get_company(company_id: int):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT * FROM companies WHERE id = ?", (company_id,))
+    row = c.fetchone()
+    conn.close()
+    return row
+
+def update_company_profile(company_id: int, name: str, email: str, password: str | None = None) -> bool:
+    """Wijzig naam/e-mail; wachtwoord alleen als meegegeven. True bij succes, False bij constraint-fout (bv. duplicate email)."""
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        if password:
+            c.execute(
+                "UPDATE companies SET name = ?, email = ?, password = ? WHERE id = ?",
+                (name, email, password, company_id),
+            )
+        else:
+            c.execute(
+                "UPDATE companies SET name = ?, email = ? WHERE id = ?",
+                (name, email, company_id),
+            )
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 # -------------------------------------------------
 # Categories
