@@ -1,13 +1,17 @@
+# app.py (kop)
+from database import add_service  # <-- deze moet bovenaan staan
 import os
 from pathlib import Path
-import pandas as pd
 import sqlite3
+import pandas as pd
 import streamlit as st
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "database.db"
 
 def get_bookings_overview(company_id):
+    ...
+
     # 1) Valideren
     if company_id in (None, "", 0):
         st.warning("company_id ontbreekt of is ongeldig.")
