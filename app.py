@@ -352,7 +352,14 @@ else:
                 ec1, ec2, ec3, ec4 = st.columns([2,1,1,1])
                 e_name = ec1.text_input("Naam", value=row["name"])
                 e_price = ec2.number_input("Prijs (€)", min_value=0.0, step=0.50, value=float(row["price"]))
-                e_dur = ec3.number_input("Duur (minuten)", min_value=5, step=5, value=int(row["duration"]))
+                e_dur = ec3.number_input(
+    "Duur (minuten)",
+    min_value=5,
+    step=5,
+    value=int(row["duration"]),
+    key=f"dur_{row['id']}"  # unieker ID per dienst
+)
+
                 e_cat = ec4.selectbox("Categorie", options=cat_names, index=(cat_names.index(row["category"]) if row["category"] in cat_names else 0))
                 e_desc = st.text_area("Beschrijving", value=row["description"] or "", height=90)
                 bc1, bc2 = st.columns([1,1])
