@@ -1,16 +1,58 @@
+import os
+from pathlib import Path
 import pandas as pd
 import sqlite3
+import streamlit as st
+
+BASE_DIR = Path(__file__).resolve().parent
+DB_PATH = BASE_DIR / "database.db"
 
 def get_bookings_overview(company_id):
-    conn = sqlite3.connect("database.db")
+    # 1) Valideren
+    if company_id in (None, "", 0):
+        st.warning("company_id ontbreekt of is ongeldig.")
+        return pd.DataFrame(columns=["id", "date", "customer", "service", "total_price"])
+
+    # 2) Bestaat de DB?
+    if not DB_PATH.exists():
+        st.error(f"Databasebestand niet gevonden: {DB_PATH}")
+        return pd.DataFrame(columns=["id", "date", "customer", "service", "total_price"])
+
+    # 3) Query met veilige parameters
     query = """
-        SELECT id, date, customer_name AS customer, service_name AS service, total_price
+        SELECT
+            id,
+            date,
+            customer_name AS customer,
+            service_name  AS service,
+            total_price
         FROM bookings
         WHERE company_id = ?
         ORDER BY date DESC
     """
-    df = pd.read_sql_query(query, conn, params=(company_id,))
-    conn.close()
+
+    try:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            df = pd.read_sql_query(query, conn, params=(int(company_id),))
+    except Exception as e:
+        # Meestal: tabel ontbreekt of kolomnamen kloppen niet
+        st.error("Kon afspraken niet ophalen uit de database.")
+        with st.expander("Diagnose"):
+            st.write(f"DB-pad: {DB_PATH}")
+            st.write(f"Fout: {e}")
+            try:
+                with sqlite3.connect(str(DB_PATH)) as conn:
+                    tbls = pd.read_sql_query(
+                        "SELECT name FROM sqlite_master WHERE type='table'", conn
+                    )
+                st.write("Beschikbare tabellen:", tbls)
+            except Exception as e2:
+                st.write("Kon tabellen niet opvragen:", e2)
+        return pd.DataFrame(columns=["id", "date", "customer", "service", "total_price"])
+
+    # 4) Zorg dat verwachte kolommen bestaan
+    if "total_price" not in df.columns:
+        df["total_price"] = 0.0
     return df
 
 import datetime as dt
