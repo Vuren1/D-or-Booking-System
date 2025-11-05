@@ -16,14 +16,15 @@ from database import (
     get_company,
     get_reminder_settings,
     upsert_reminder_settings,
-    ...
+    activate_company,
 )
 
 from payment import (
     create_checkout_session,
     check_payment,
-    get_company_id_from_session,  # zorg dat deze in je payment.py staat (eerder gedeeld)
+    get_company_id_from_session,  # zorg dat deze in payment.py staat
 )
+
 
 # -----------------------------
 # Init & UI
