@@ -253,7 +253,21 @@ if "company_id" not in st.session_state:
     st.write("Welkom! Registreer als nieuw bedrijf of log in als bestaande klant.")
 
     # Twee kolommen: links registratie, rechts login
-    col_reg, col_log = st.columns(2)
+# 📱 Mobile-friendly layout
+st.markdown(
+    """
+    <style>
+    @media (max-width: 768px) {
+        div[data-testid="stHorizontalBlock"] {
+            flex-direction: column !important;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+col_reg, col_log = st.columns(2)
 
     # --- 🆕 Nieuwe registratie ---
     with col_reg:
