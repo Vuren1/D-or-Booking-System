@@ -229,35 +229,6 @@ if "session_id" in query_params:
     activate_company(company_id)
     st.success("✅ Betaling ontvangen! Je account is nu actief.")
 
-
-# --- Registratie nieuw bedrijf ---
-st.header("🧾 Nieuw bedrijf registreren")
-
-# Gebruikersinvoer
-r_name = st.text_input("Bedrijfsnaam", placeholder="Bijv. Salon Bella")
-r_email = st.text_input("E-mail", placeholder="bijv. info@bella.be")
-r_pwd = st.text_input("Wachtwoord", type="password", placeholder="Minstens 6 tekens")
-
-# Registratieknop
-if st.button("📋 Registreer"):
-    if not r_name or not r_email or not r_pwd:
-        st.error("Vul alle velden in (bedrijfsnaam, e-mail en wachtwoord).")
-    else:
-        # Check of e-mail al bestaat
-        existing = get_company_by_email(r_email)
-        if existing:
-            st.error("⚠️ Dit e-mailadres is al geregistreerd.")
-        else:
-            new_id = add_company(r_name, r_email, r_pwd)
-            if new_id > 0:
-                st.session_state.company_id = new_id
-                st.session_state.company_name = r_name
-                st.success(f"✅ {r_name} is succesvol geregistreerd!")
-                st.balloons()
-                st.rerun()
-            else:
-                st.error("❌ Er ging iets mis bij het registreren. Probeer opnieuw.")
-
     # -----------------------------
     # DASHBOARD (alleen na betaling)
     # -----------------------------
