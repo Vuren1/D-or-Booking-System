@@ -12,6 +12,7 @@ from database import (
     init_db,
     get_categories,
     get_services,
+    get_availability,
     add_company,
     get_company_by_email,
     get_company,
