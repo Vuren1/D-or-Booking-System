@@ -27,17 +27,26 @@ stripe.api_key = get_secret("STRIPE_SECRET_KEY")
 # ───────────────────────────────────────────────────────────────
 # 3️⃣  Database-helper voor update van 'paid'-status
 # ───────────────────────────────────────────────────────────────
-def update_company_paid(company_id: int):
-    """Markeer een bedrijf als betaald in de database."""
+from database import get_connection  # ← voeg deze import ook toe bovenaan je file
+
+def update_company_paid(company_id: int) -> None:
+    """Markeer een bedrijf als betaald (companies.paid = 1)."""
+    conn = None
     try:
-        conn = sqlite3.connect("database.db")
+        conn = get_connection()
         c = conn.cursor()
         c.execute("UPDATE companies SET paid = 1 WHERE id = ?", (company_id,))
         conn.commit()
-        conn.close()
         st.info(f"✅ Bedrijf {company_id} gemarkeerd als betaald.")
     except Exception as e:
         st.warning(f"⚠️ Fout bij updaten van betaalstatus: {e}")
+    finally:
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
+
 
 
 # ───────────────────────────────────────────────────────────────
