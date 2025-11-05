@@ -500,6 +500,7 @@ tz = colB.selectbox("Tijdzone", tz_choices, index=tz_choices.index(tz_value) if 
 
 st.markdown("#### 📄 Sjablonen")
 c1, c2 = st.columns(2)
+
     tpl_sms_day_before = c1.text_area(
         "SMS – dag ervoor",
         value=s.get("template_day_before_sms") or
