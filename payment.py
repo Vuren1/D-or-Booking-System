@@ -51,25 +51,32 @@ def update_company_paid(company_id: int) -> None:
 
 
 
-# ───────────────────────────────────────────────────────────────
-# 4️⃣  Maak Stripe Checkout-sessie aan
-# ───────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------
+# Maak Stripe Checkout-sessie aan
+# ---------------------------------------------------------------
 def create_checkout_session(company_id: int, company_email: str, company_name: str = "") -> str:
     """
-    Maakt een Stripe Checkout sessie aan en geeft de URL terug.
-    Na betaling wordt de gebruiker teruggestuurd met ?session_id=...&company=...
+    Maakt een Stripe Checkout-sessie aan en geeft de URL terug.
+    Na betaling wordt de gebruiker teruggestuurd naar de app met
+    de sessie-ID en het bedrijfs-ID in de URL.
     """
     try:
+        # ✅ Gevoelige sleutels ophalen
         price_id = get_secret("STRIPE_PRICE_ID")
         app_url = get_secret("APP_URL")
 
-        # Maak de Stripe Checkout sessie aan
+        # ✅ Debug (optioneel, voor logs)
+        print(f"Stripe checkout gestart voor {company_email}")
+        print(f"Gebruik Price ID: {price_id}")
+        print(f"Redirect URL base: {app_url}")
+
+        # ✅ Maak de checkout-sessie aan
         session = stripe.checkout.Session.create(
             mode="subscription",
             payment_method_types=["card", "ideal"],
             line_items=[{"price": price_id, "quantity": 1}],
-            success_url=f"{app_url}/?session_id={{CHECKOUT_SESSION_ID}}&company={company_id}",
-            cancel_url=f"{app_url}",
+            success_url=f"{app_url}/success?session_id={{CHECKOUT_SESSION_ID}}&company={company_id}",
+            cancel_url=f"{app_url}/cancel",
             customer_email=company_email,
             metadata={
                 "company_id": str(company_id),
@@ -77,10 +84,13 @@ def create_checkout_session(company_id: int, company_email: str, company_name: s
                 "company_name": company_name,
             },
         )
+
+        # ✅ Retourneer de Stripe-URL naar de app
         return session.url
 
     except Exception as e:
         st.warning(f"⚠️ Fout bij aanmaken Stripe-sessie: {e}")
+        print("Stripe-foutdetails:", e)
         return None
 
 
