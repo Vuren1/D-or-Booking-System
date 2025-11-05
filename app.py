@@ -307,82 +307,95 @@ else:
             st.metric("Dagen met beschikbaarheid", len(avail_df["day"].unique()) if not avail_df.empty else 0)
 
     # --- Diensten ---
-    with tabs[1]:
-        st.subheader("Diensten")
-        cats_df = get_categories(company_id)
-        cat_names = ["Algemeen"] + (cats_df["name"].tolist() if not cats_df.empty else [])
-        col1, col2, col3, col4 = st.columns([2,1,1,1])
-        sv_name = col1.text_input("Naam", placeholder="Bijv. Pedicure Basic")
-        sv_price = col2.number_input("Prijs (€)", min_value=0.0, step=0.50, value=0.0)
-        sv_dur = col3.number_input("Duur (minuten)", min_value=5, step=5, value=30)
-        pick_cat = col4.selectbox("Categorie", options=["Algemeen", "Nieuwe categorie…"] + (cats_df["name"].tolist() if not cats_df.empty else []))
+with tabs[1]:
+    st.subheader("Diensten")
 
-        new_cat_name, new_cat_desc = None, ""
-        if pick_cat == "Nieuwe categorie…":
-            st.info("Nieuwe categorie")
-            new_cat_name = st.text_input("Categorie naam", placeholder="Bijv. Deelbehandelingen")
-            new_cat_desc = st.text_area("Categorie beschrijving (optioneel)", placeholder="Deze groep bevat…")
+    # categorieën ophalen
+    cats_df = get_categories(company_id)
+    cat_names = ["Algemeen"] + (cats_df["name"].tolist() if not cats_df.empty else [])
 
-        sv_desc = st.text_area("Beschrijving (dienst, optioneel)", placeholder="Bijv. Voetbad, nagels knippen en vijlen, voetmassage (5min)")
+    # nieuwe dienst toevoegen
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+    sv_name = col1.text_input("Naam", placeholder="Bijv. Pedicure Basic", key="new_sv_name")
+    sv_price = col2.number_input("Prijs (€)", min_value=0.0, step=0.50, value=0.0, key="new_sv_price")
+    sv_dur   = col3.number_input("Duur (minuten)", min_value=5, step=5, value=30, key="new_sv_dur")
+    pick_cat = col4.selectbox(
+        "Categorie",
+        options=["Algemeen", "Nieuwe categorie…"] + (cats_df["name"].tolist() if not cats_df.empty else []),
+        key="new_sv_cat"
+    )
 
-        if st.button("➕ Toevoegen", type="primary", use_container_width=False):
-            if not sv_name:
-                st.error("Vul een dienstnaam in.")
-            else:
-                final_cat = pick_cat
-                if pick_cat == "Nieuwe categorie…" and new_cat_name:
-                    upsert_category(company_id, new_cat_name, new_cat_desc)
-                    final_cat = new_cat_name
-                add_service(company_id, sv_name, sv_price, sv_dur, final_cat, sv_desc)
-                st.success("Dienst toegevoegd.")
+    new_cat_name, new_cat_desc = None, ""
+    if pick_cat == "Nieuwe categorie…":
+        st.info("Nieuwe categorie")
+        new_cat_name = st.text_input("Categorie naam", placeholder="Bijv. Deelbehandelingen", key="new_cat_name")
+        new_cat_desc = st.text_area("Categorie beschrijving (optioneel)", placeholder="Deze groep bevat…", key="new_cat_desc")
+
+    sv_desc = st.text_area(
+        "Beschrijving (dienst, optioneel)",
+        placeholder="Bijv. Voetbad, nagels knippen en vijlen, voetmassage (5min)",
+        key="new_sv_desc"
+    )
+
+    if st.button("➕ Toevoegen", type="primary", use_container_width=False, key="btn_add_service"):
+        if not sv_name:
+            st.error("Vul een dienstnaam in.")
+        else:
+            final_cat = pick_cat
+            if pick_cat == "Nieuwe categorie…" and new_cat_name:
+                # bestond bij jou als 'upsert_category', maar in database.py staat 'add_category'
+                add_category(company_id, new_cat_name, new_cat_desc)
+                final_cat = new_cat_name
+
+            add_service(company_id, sv_name, float(sv_price), int(sv_dur), final_cat, sv_desc)
+            st.success("Dienst toegevoegd.")
+            st.rerun()
+
+    st.divider()
+    st.markdown("#### Huidige diensten")
+
+    cur = get_services(company_id)
+    if cur.empty:
+        st.info("Nog geen diensten toegevoegd.")
+    else:
+        st.dataframe(cur, use_container_width=True)
+
+        # ✅ BEWERKEN/VERWIJDEREN staat **binnen** tabs[1] en gebruikt unieke keys
+        with st.expander("✏️ Bewerken of verwijderen", expanded=False):
+            ids = cur["id"].tolist()
+            edit_id = st.selectbox(
+                "Kies dienst",
+                options=ids,
+                format_func=lambda x: f"{x} – {cur[cur['id'] == x]['name'].iloc[0]}",
+                key=f"edit_select_{company_id}"
+            )
+
+            row = cur[cur["id"] == edit_id].iloc[0]
+            ec1, ec2, ec3, ec4 = st.columns([2, 1, 1, 1])
+
+            e_name = ec1.text_input("Naam", value=row["name"], key=f"edit_name_{edit_id}")
+            e_price = ec2.number_input("Prijs (€)", min_value=0.0, step=0.50,
+                                       value=float(row["price"]), key=f"edit_price_{edit_id}")
+            e_dur = ec3.number_input("Duur (minuten)", min_value=5, step=5,
+                                     value=int(row["duration"]), key=f"edit_dur_{edit_id}")
+            e_cat = ec4.selectbox("Categorie", options=cat_names,
+                                  index=(cat_names.index(row["category"]) if row["category"] in cat_names else 0),
+                                  key=f"edit_cat_{edit_id}")
+
+            e_desc = st.text_area("Beschrijving", value=row["description"] or "", height=90, key=f"edit_desc_{edit_id}")
+
+            bc1, bc2 = st.columns([1, 1])
+            if bc1.button("💾 Opslaan wijzigingen", type="primary", key=f"save_{edit_id}"):
+                # let op: database.update_service(service_id, name, price, duration, category, description)
+                update_service(edit_id, e_name, float(e_price), int(e_dur), e_cat, e_desc)
+                st.success("Dienst bijgewerkt.")
                 st.rerun()
 
-        st.divider()
-        st.markdown("#### Huidige diensten")
-        cur = get_services(company_id)
-        if cur.empty:
-            st.info("Nog geen diensten toegevoegd.")
-        else:
-            st.dataframe(cur, use_container_width=True)
-
-with st.expander("✏️ Bewerken of verwijderen", expanded=False):
-    ids = cur["id"].tolist()
-    edit_id = st.selectbox(
-        "Kies dienst",
-        options=ids,
-        format_func=lambda x: f"{x} – {cur[cur['id'] == x]['name'].iloc[0]}"
-    )
-
-    row = cur[cur["id"] == edit_id].iloc[0]
-    ec1, ec2, ec3, ec4 = st.columns([2, 1, 1, 1])
-
-    e_name = ec1.text_input("Naam", value=row["name"], key=f"name_{row['id']}")
-    e_price = ec2.number_input("Prijs (€)", value=float(row["price"]), key=f"price_{row['id']}")
-    e_dur = ec3.number_input(
-        "Duur (minuten)",
-        min_value=5,
-        step=5,
-        value=int(row["duration"]),
-        key=f"dur_{row['id']}"
-    )
-
-    e_cat = ec4.selectbox(
-        "Categorie",
-        options=cat_names,
-        index=(cat_names.index(row["category"]) if row["category"] in cat_names else 0)
-    )
-
-                e_cat = ec4.selectbox("Categorie", options=cat_names, index=(cat_names.index(row["category"]) if row["category"] in cat_names else 0))
-                e_desc = st.text_area("Beschrijving", value=row["description"] or "", height=90)
-                bc1, bc2 = st.columns([1,1])
-                if bc1.button("Opslaan wijzigingen", type="primary"):
-                    update_service(edit_id, company_id, e_name, e_price, e_dur, e_cat, e_desc)
-                    st.success("Dienst bijgewerkt.")
-                    st.rerun()
-                if bc2.button("❌ Verwijderen", type="secondary"):
-                    delete_service(edit_id, company_id)
-                    st.success("Dienst verwijderd.")
-                    st.rerun()
+            if bc2.button("❌ Verwijderen", type="secondary", key=f"del_{edit_id}"):
+                # let op: delete_service(service_id) verwacht alleen het id
+                delete_service(edit_id)
+                st.success("Dienst verwijderd.")
+                st.rerun()
 
     # --- Beschikbaarheid ---
     with tabs[2]:
