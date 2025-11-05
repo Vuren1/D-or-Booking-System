@@ -213,17 +213,15 @@ def add_category(company_id: int, name: str, description: str = ""):
     conn.commit()
     conn.close()
 
-
 def get_categories(company_id: int) -> pd.DataFrame:
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()  # Gebruik de get_connection() functie
     df = pd.read_sql_query(
-        "SELECT * FROM categories WHERE company_id = ? ORDER BY name ASC",
+        "SELECT * FROM categories WHERE company_id = ? ORDER BY name ASC", 
         conn,
-        params=(company_id,),
+        params=(company_id,)
     )
-    conn.close()
+    conn.close()  # Sluit de verbinding
     return df
-
 
 def update_category(category_id: int, name: str, description: str):
     conn = sqlite3.connect(DB_NAME)
