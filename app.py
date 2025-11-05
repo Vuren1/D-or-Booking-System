@@ -346,7 +346,15 @@ with col_right:
    # -------------------------------------------------
 # Tabs
 # -------------------------------------------------
-tabs = st.tabs(["🏠 Overzicht", "💅 Diensten", "🕓 Beschikbaarheid", "👓 Klant-preview", "📁 Afspraken"])
+tabs = st.tabs([
+    "🏠 Overzicht",
+    "💅 Diensten",
+    "🕓 Beschikbaarheid",
+    "🔔 Herinneringen",      # ← nieuw
+    "👓 Klant-preview",
+    "📁 Afspraken",
+    "⚙️ Account"            # ← nieuw
+])
 
 
 # -------------------------------------------------
