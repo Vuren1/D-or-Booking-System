@@ -211,13 +211,22 @@ if session_id_param and "logged_in" not in st.session_state:
     except Exception:
         cid = None
     if paid_ok and cid:
-        update_company_paid(cid)
+        activate_company(cid)
         st.session_state.logged_in = True
         st.session_state.company_id = int(cid)
         st.session_state.company_name = meta.get("company_name", f"bedrijf #{cid}")
         st.success("Betaling bevestigd. Welkom!")
     # schoon URL (haal session_id weg, laat company staan zodat deeplink werkt)
     st.experimental_set_query_params(company=cid or company_id_param)
+
+from database import activate_company
+
+# ...
+if "session_id" in st.query_params:
+    company_id = int(st.query_params.get("company")[0])
+    activate_company(company_id)
+    st.success("✅ Betaling ontvangen! Je account is nu actief.")
+
 
 # -----------------------------
 # Auth: registreren / inloggen
