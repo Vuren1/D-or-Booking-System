@@ -213,6 +213,17 @@ def update_company_paid(company_id: int, paid: int = 1):
     conn.commit()
     conn.close()
 
+def activate_company(company_id: int):
+    """
+    Zet het bedrijf actief (betaald) na succesvolle betaling.
+    Equivalent aan update_company_paid(company_id, 1),
+    maar apart voor duidelijkheid in Stripe-callback.
+    """
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("UPDATE companies SET paid = 1 WHERE id = ?", (company_id,))
+    conn.commit()
+    conn.close()
 
 def get_company_name_by_id(company_id: int) -> str:
     conn = sqlite3.connect(DB_NAME)
