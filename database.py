@@ -155,18 +155,37 @@ def init_db():
 # -------------------------------------------------
 # Companies
 # -------------------------------------------------
+from datetime import datetime  # voeg dit toe bovenaan het bestand (als dat nog niet gedaan is)
+
 def add_company(name: str, email: str, password: str) -> int:
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    created_at = datetime.now().isoformat()
-    c.execute(
-        "INSERT INTO companies (name, email, password, created_at) VALUES (?,?,?,?)",
-        (name, email, password, created_at),
-    )
-    conn.commit()
-    company_id = c.lastrowid
-    conn.close()
-    return company_id
+    """Voegt een nieuw bedrijf toe aan de database en geeft het ID terug."""
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+
+        # Maak tijdstempel
+        created_at = datetime.now().isoformat()
+
+        # Voeg gegevens in de tabel 'companies'
+        c.execute(
+            """
+            INSERT INTO companies (name, email, password, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (name, email, password, created_at),
+        )
+
+        conn.commit()
+        company_id = c.lastrowid
+        return company_id
+
+    except Exception as e:
+        print(f"❌ Fout bij toevoegen van bedrijf: {e}")
+        return -1
+
+    finally:
+        if conn:
+            conn.close()
 
 
 def get_company_by_email(email: str):
