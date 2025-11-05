@@ -40,7 +40,7 @@ def _ensure_booking_items_snapshot_columns(conn: sqlite3.Connection):
 # DB init
 # -------------------------------------------------
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()  # Haal de verbinding op
     c = conn.cursor()
 
     # Bedrijven
@@ -145,9 +145,8 @@ def init_db():
         )
     """)
 
-    conn.commit()
-    conn.close()
-
+    conn.commit()  # Maak alles permanent
+    conn.close()   # Sluit de verbinding
 
 # -------------------------------------------------
 # Companies
