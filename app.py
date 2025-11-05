@@ -1,3 +1,4 @@
+import datetime as dt
 import io
 from datetime import datetime, date as _date
 from zoneinfo import ZoneInfo
@@ -195,12 +196,12 @@ def _reminder_settings_block(company_id: int, company_name: str):
             st.success("Herinnering-instellingen opgeslagen.")
 
 
-# -----------------------------
-# Query params & auto-activatie
-# -----------------------------
-qp = st.experimental_get_query_params()
-company_id_param = qp.get("company", [None])[0]
-session_id_param = qp.get("session_id", [None])[0]
+# ------------------------------------------------
+# Query params & auto-activate
+# ------------------------------------------------
+qp = st.query_params
+company_id_param = qp.get("company")         # geeft str of None
+session_id_param = qp.get("session_id")      # geeft str of None
 
 # Stripe terugkomst: activeer + log in
 if session_id_param and "logged_in" not in st.session_state:
@@ -210,16 +211,17 @@ if session_id_param and "logged_in" not in st.session_state:
         cid, meta = get_company_id_from_session(session_id_param)  # (company_id, metadata dict)
     except Exception:
         cid = None
+
     if paid_ok and cid:
         activate_company(cid)
         st.session_state.logged_in = True
         st.session_state.company_id = int(cid)
         st.session_state.company_name = meta.get("company_name", f"bedrijf #{cid}")
         st.success("Betaling bevestigd. Welkom!")
-    # schoon URL (haal session_id weg, laat company staan zodat deeplink werkt)
-    st.experimental_set_query_params(company=cid or company_id_param)
 
-from database import activate_company
+        # URL opschonen: laat alleen company-id staan
+        st.query_params["company"] = str(cid)
+        st.query_params.pop("session_id", None)
 
 # ...
 query_params = st.experimental_get_query_params()
@@ -483,7 +485,11 @@ with tabs[3]:
                                     value=int(s.get("days_before", 1)))
     # '09:00' → tijdobject
     send_time_str = (s.get("send_time") or "09:00")
-    send_time = colB.time_input("Verzendtijd", value=dt.datetime.strptime(send_time_str, "%H:%M").time())
+try:
+    default_time = dt.datetime.strptime(send_time_str, "%H:%M").time()
+except Exception:
+    default_time = dt.time(9, 0)
+send_time = colB.time_input("Verzendtijd", value=default_time)
 
     same_day = colA.toggle("Extra herinnering op de dag zelf", value=bool(s.get("same_day_enabled", 0)))
     same_day_min = colB.number_input("Minuten vóór afspraak (zelfde dag)", min_value=5, max_value=480, step=5,
