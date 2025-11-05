@@ -466,6 +466,77 @@ with tabs[1]:
         else:
             st.dataframe(av, use_container_width=True)
 
+    # --- 🔔 Herinneringen ---
+with tabs[3]:
+    st.subheader("Herinneringsberichten")
+
+    # 1) Ophalen huidige instellingen (maakt automatisch default record als het nog niet bestaat)
+    s = get_reminder_settings(company_id)
+
+    # 2) UI
+    colA, colB = st.columns(2)
+    enabled = colA.toggle("Herinneringen inschakelen", value=bool(s.get("enabled", 0)))
+    sms_enabled = colA.toggle("SMS gebruiken", value=bool(s.get("sms_enabled", 1)))
+    wa_enabled  = colA.toggle("WhatsApp gebruiken", value=bool(s.get("whatsapp_enabled", 0)))
+
+    days_before = colB.number_input("Dagen op voorhand", min_value=0, max_value=7,
+                                    value=int(s.get("days_before", 1)))
+    # '09:00' → tijdobject
+    send_time_str = (s.get("send_time") or "09:00")
+    send_time = colB.time_input("Verzendtijd", value=dt.datetime.strptime(send_time_str, "%H:%M").time())
+
+    same_day = colA.toggle("Extra herinnering op de dag zelf", value=bool(s.get("same_day_enabled", 0)))
+    same_day_min = colB.number_input("Minuten vóór afspraak (zelfde dag)", min_value=5, max_value=480, step=5,
+                                     value=int(s.get("same_day_minutes_before", 60)))
+
+    tz_choices = ["Europe/Brussels", "Europe/Amsterdam", "UTC"]
+    tz_value = s.get("tz") or "Europe/Brussels"
+    tz = colB.selectbox("Tijdzone", tz_choices, index=tz_choices.index(tz_value) if tz_value in tz_choices else 0)
+
+    st.markdown("##### Sjablonen")
+    c1, c2 = st.columns(2)
+    tpl_sms_day_before = c1.text_area(
+        "SMS – dag ervoor",
+        value=s.get("template_day_before_sms") or
+              "Herinnering: je afspraak is morgen om {TIME} bij {COMPANY}. Tot dan!"
+    )
+    tpl_sms_same_day = c1.text_area(
+        "SMS – zelfde dag",
+        value=s.get("template_same_day_sms") or
+              "Herinnering: je afspraak is vandaag om {TIME} bij {COMPANY}."
+    )
+    tpl_wa_day_before = c2.text_area(
+        "WhatsApp – dag ervoor",
+        value=s.get("template_day_before_wa") or
+              "Hallo! Morgen om {TIME} zien we je bij {COMPANY}."
+    )
+    tpl_wa_same_day = c2.text_area(
+        "WhatsApp – zelfde dag",
+        value=s.get("template_same_day_wa") or
+              "Tot straks! Je afspraak is vandaag om {TIME} bij {COMPANY}."
+    )
+
+    st.caption("Beschikbare placeholders: {TIME}, {DATE}, {COMPANY}, {NAME} (indien van toepassing).")
+
+    if st.button("💾 Instellingen opslaan", type="primary"):
+        upsert_reminder_settings(
+            company_id=company_id,
+            enabled=int(enabled),
+            sms_enabled=int(sms_enabled),
+            whatsapp_enabled=int(wa_enabled),
+            days_before=int(days_before),
+            send_time=send_time.strftime("%H:%M"),
+            same_day_enabled=int(same_day),
+            same_day_minutes_before=int(same_day_min),
+            tz=tz,
+            template_day_before_sms=tpl_sms_day_before,
+            template_same_day_sms=tpl_sms_same_day,
+            template_day_before_wa=tpl_wa_day_before,
+            template_same_day_wa=tpl_wa_same_day,
+        )
+        st.success("Herinneringsinstellingen opgeslagen.")
+        st.rerun()
+
     # --- Klant-preview ---
     with tabs[3]:
         st.subheader("Zo ziet je klant het")
@@ -507,6 +578,42 @@ with tabs[1]:
         st.experimental_set_query_params()
         st.rerun()
 
+# --- ⚙️ Account ---
+with tabs[6]:
+    st.subheader("Accountinstellingen")
+
+    row = get_company(company_id)  # (id, name, email, password, paid, created_at)
+    if not row:
+        st.error("Account niet gevonden.")
+    else:
+        cur_name, cur_email = row[1], row[2]
+
+        a1, a2 = st.columns(2)
+        new_name  = a1.text_input("Bedrijfsnaam", value=cur_name or "")
+        new_email = a2.text_input("E-mail", value=cur_email or "")
+
+        st.markdown("**Wachtwoord wijzigen (optioneel)**")
+        pw1, pw2 = st.columns(2)
+        new_pwd = pw1.text_input("Nieuw wachtwoord", type="password", placeholder="Leeg laten = niet wijzigen")
+        new_pwd2 = pw2.text_input("Herhaal nieuw wachtwoord", type="password", placeholder="")
+
+        if st.button("💾 Opslaan", type="primary"):
+            if new_pwd and new_pwd != new_pwd2:
+                st.error("Nieuw wachtwoord komt niet overeen.")
+            else:
+                ok = update_company_profile(
+                    company_id,
+                    name=new_name.strip(),
+                    email=new_email.strip(),
+                    password=(new_pwd.strip() if new_pwd else None),
+                )
+                if ok:
+                    st.success("Gegevens bijgewerkt.")
+                    # update naamsbadge
+                    st.session_state.company_name = new_name.strip() or st.session_state.company_name
+                    st.rerun()
+                else:
+                    st.error("Wijzigen mislukt. Bestaat dit e-mailadres al?")
 
 # =========================================================
 # KLANT-BOEKINGSPAGINA (als niet ingelogd en ?company=...)
