@@ -1,4 +1,4 @@
-from __future__ import annotations  # voorkomt evaluatie van type hints op runtime
+from datetime import datetime
 import os
 import sqlite3
 import pandas as pd
