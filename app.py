@@ -272,6 +272,45 @@ if st.button("📋 Registreer"):
         except Exception:
             pass
         st.stop()
+# ------------------------------------------------
+# ✅ Nieuw: Registratie / login-check
+# ------------------------------------------------
+
+if "company_id" not in st.session_state:
+    st.title("D'or Booking System")
+    st.markdown("Nieuw bedrijf? Registreer hieronder:")
+
+    r_name = st.text_input("Bedrijfsnaam", placeholder="Bijv. Salon Bella")
+    r_email = st.text_input("E-mail", placeholder="bijv. info@bella.be")
+    r_pwd = st.text_input("Wachtwoord", type="password", placeholder="Minstens 6 tekens")
+
+    if st.button("📋 Registreer"):
+        if not r_name or not r_email or not r_pwd:
+            st.error("Vul alle velden in (bedrijfsnaam, e-mail en wachtwoord).")
+        else:
+            existing = get_company_by_email(r_email)
+            if existing:
+                st.error("⚠️ Dit e-mailadres is al geregistreerd.")
+            else:
+                new_id = add_company(r_name, r_email, r_pwd)
+                if new_id > 0:
+                    st.session_state.company_id = new_id
+                    st.session_state.company_name = r_name
+                    st.success(f"✅ {r_name} is succesvol geregistreerd!")
+                    st.balloons()
+                    st.rerun()
+                else:
+                    st.error("❌ Er ging iets mis bij het registreren. Probeer opnieuw.")
+
+    st.stop()  # stop hier → dashboard/tabs niet tonen
+
+# ------------------------------------------------
+# Bedrijf is ingelogd → Dashboard
+# ------------------------------------------------
+company_id = st.session_state.company_id
+company_name = st.session_state.company_name
+
+st.info(f"💼 Ingelogd als: {company_name}")
 
    # -------------------------------------------------
 # Tabs
