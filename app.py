@@ -372,6 +372,8 @@ else:
         index=(cat_names.index(row["category"]) if row["category"] in cat_names else 0)
     )
 
+print("Expander geladen!")  # ✅ géén extra inspringing
+
 
                 e_cat = ec4.selectbox("Categorie", options=cat_names, index=(cat_names.index(row["category"]) if row["category"] in cat_names else 0))
                 e_desc = st.text_area("Beschrijving", value=row["description"] or "", height=90)
