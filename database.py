@@ -214,13 +214,10 @@ def add_category(company_id: int, name: str, description: str = ""):
     conn.close()
 
 def get_categories(company_id: int) -> pd.DataFrame:
-    conn = get_connection()  # Gebruik de get_connection() functie
-    df = pd.read_sql_query(
-        "SELECT * FROM categories WHERE company_id = ? ORDER BY name ASC", 
-        conn,
-        params=(company_id,)
-    )
-    conn.close()  # Sluit de verbinding
+    conn = get_connection()  # Haal de databaseverbinding op
+    query = "SELECT * FROM categories WHERE company_id = ? ORDER BY name ASC"
+    df = pd.read_sql_query(query, conn, params=(company_id,))
+    conn.close()
     return df
 
 def update_category(category_id: int, name: str, description: str):
