@@ -253,20 +253,31 @@ if "company_id" not in st.session_state:
     st.markdown("<h1 style='text-align: center;'>💎 D'or Booking System</h1>", unsafe_allow_html=True)
     st.write("Welkom! Registreer als nieuw bedrijf of log in als bestaande klant.")
 
-    # 📱 Mobile-friendly layout
+        # 📱 Mobile-friendly layout (werkt gegarandeerd)
     st.markdown(
         """
         <style>
         @media (max-width: 768px) {
-            div[data-testid="stHorizontalBlock"] {
+            /* Zet kolommen onder elkaar */
+            [data-testid="stHorizontalBlock"] {
                 flex-direction: column !important;
-                gap: 2rem !important;  /* extra ruimte tussen blokken op mobiel */
+            }
+
+            /* Geef extra ruimte tussen de twee secties */
+            [data-testid="column"] {
+                margin-bottom: 2rem !important;
+            }
+
+            /* Centreer de knoppen */
+            button[kind="primary"] {
+                width: 100% !important;
             }
         }
         </style>
         """,
         unsafe_allow_html=True
     )
+
 
     # Twee kolommen: links registratie, rechts login
     col_reg, col_log = st.columns(2)
