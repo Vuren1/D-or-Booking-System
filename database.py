@@ -13,7 +13,7 @@ def get_connection():
     return sqlite3.connect(DB_NAME, check_same_thread=False)
 
 # -------------------------------------------------
-# Helper: migratie voor oude DB's
+# Helper: migraties voor oude DB's
 # -------------------------------------------------
 def _ensure_booking_items_snapshot_columns(conn: sqlite3.Connection):
     """
@@ -29,6 +29,18 @@ def _ensure_booking_items_snapshot_columns(conn: sqlite3.Connection):
         c.execute("ALTER TABLE booking_items ADD COLUMN price REAL")
     if "duration" not in cols:
         c.execute("ALTER TABLE booking_items ADD COLUMN duration INTEGER")
+    conn.commit()
+
+def _ensure_services_is_active_column(conn: sqlite3.Connection):
+    """
+    Zorgt dat de kolom services.is_active bestaat (1 = zichtbaar voor klanten).
+    Dit verandert géén bestaande data.
+    """
+    c = conn.cursor()
+    c.execute("PRAGMA table_info(services)")
+    cols = {row[1] for row in c.fetchall()}
+    if "is_active" not in cols:
+        c.execute("ALTER TABLE services ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
     conn.commit()
 
 # -------------------------------------------------
@@ -74,6 +86,8 @@ def init_db():
             FOREIGN KEY (company_id) REFERENCES companies(id)
         )
     """)
+    # Zorg dat zichtbaarheid beschikbaar is
+    _ensure_services_is_active_column(conn)
 
     # Beschikbaarheid
     c.execute("""
@@ -115,7 +129,6 @@ def init_db():
             FOREIGN KEY (service_id) REFERENCES services(id)
         )
     """)
-
     _ensure_booking_items_snapshot_columns(conn)
 
     # Herinnering-instellingen
@@ -311,6 +324,30 @@ def delete_service(service_id: int):
     c.execute("DELETE FROM services WHERE id = ?", (service_id,))
     conn.commit()
     conn.close()
+
+def set_service_active(service_id: int, is_active: bool):
+    """Activeer/deactiveer dienst voor klantenweergave (is_active: 1/0)."""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("UPDATE services SET is_active=? WHERE id=?", (1 if is_active else 0, service_id))
+    conn.commit()
+    conn.close()
+
+def get_public_services(company_id: int) -> pd.DataFrame:
+    """Alleen diensten die zichtbaar zijn voor klanten (is_active = 1)."""
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query(
+        """
+        SELECT id, name, price, duration, category, description
+        FROM services
+        WHERE company_id = ? AND COALESCE(is_active, 1) = 1
+        ORDER BY COALESCE(category, 'Algemeen'), name
+        """,
+        conn,
+        params=(company_id,),
+    )
+    conn.close()
+    return df
 
 # -------------------------------------------------
 # Availability
