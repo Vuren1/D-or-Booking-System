@@ -491,9 +491,9 @@ except Exception:
     default_time = dt.time(9, 0)
 send_time = colB.time_input("Verzendtijd", value=default_time)
 
-    same_day = colA.toggle("Extra herinnering op de dag zelf", value=bool(s.get("same_day_enabled", 0)))
-    same_day_min = colB.number_input("Minuten vóór afspraak (zelfde dag)", min_value=5, max_value=480, step=5,
-                                     value=int(s.get("same_day_minutes_before", 60)))
+same_day = colA.toggle("Extra herinnering op de dag zelf", value=bool(s.get("same_day_enabled", 0)))
+same_day_min = colB.number_input("Minuten vóór afspraak (zelfde dag)", min_value=5, step=5, value=int(s.get("same_day_minutes", 30)))
+
 
     tz_choices = ["Europe/Brussels", "Europe/Amsterdam", "UTC"]
     tz_value = s.get("tz") or "Europe/Brussels"
