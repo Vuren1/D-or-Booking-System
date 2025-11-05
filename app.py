@@ -9,6 +9,7 @@ import qrcode
 from twilio.rest import Client
 
 from database import (
+    init_db,
     get_categories,
     get_services,
     add_company,
