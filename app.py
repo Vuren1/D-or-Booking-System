@@ -345,7 +345,7 @@ else:
         else:
             st.dataframe(cur, use_container_width=True)
 
-            with st.expander("✏️ Bewerken of verwijderen", expanded=False):
+with st.expander("✏️ Bewerken of verwijderen", expanded=False):
     ids = cur["id"].tolist()
     edit_id = st.selectbox(
         "Kies dienst",
@@ -371,10 +371,6 @@ else:
         options=cat_names,
         index=(cat_names.index(row["category"]) if row["category"] in cat_names else 0)
     )
-
-
-print("Expander geladen!")  # ✅ géén extra inspringing
-
 
                 e_cat = ec4.selectbox("Categorie", options=cat_names, index=(cat_names.index(row["category"]) if row["category"] in cat_names else 0))
                 e_desc = st.text_area("Beschrijving", value=row["description"] or "", height=90)
