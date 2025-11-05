@@ -1,13 +1,9 @@
-import os
 import sqlite3
 
-# Pad naar de database
-DB_PATH = os.path.join("data", "bookings.db")
+DB_NAME = "bookings.db"
 
 def get_connection():
-    os.makedirs("data", exist_ok=True)  # Zorgt ervoor dat de map bestaat
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    return conn
+    return sqlite3.connect(DB_NAME, check_same_thread=False)
 
 # -------------------------------------------------
 # Pad + DB bestand
