@@ -243,6 +243,7 @@ if "session_id" in query_params:
         except Exception:
             pass
         st.stop()
+
 # ------------------------------------------------
 # ✅ Login & registratie (boven tabs)
 # ------------------------------------------------
@@ -252,22 +253,23 @@ if "company_id" not in st.session_state:
     st.markdown("<h1 style='text-align: center;'>💎 D'or Booking System</h1>", unsafe_allow_html=True)
     st.write("Welkom! Registreer als nieuw bedrijf of log in als bestaande klant.")
 
-    # Twee kolommen: links registratie, rechts login
-# 📱 Mobile-friendly layout
-st.markdown(
-    """
-    <style>
-    @media (max-width: 768px) {
-        div[data-testid="stHorizontalBlock"] {
-            flex-direction: column !important;
+    # 📱 Mobile-friendly layout
+    st.markdown(
+        """
+        <style>
+        @media (max-width: 768px) {
+            div[data-testid="stHorizontalBlock"] {
+                flex-direction: column !important;
+                gap: 2rem !important;  /* extra ruimte tussen blokken op mobiel */
+            }
         }
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
-col_reg, col_log = st.columns(2)
+    # Twee kolommen: links registratie, rechts login
+    col_reg, col_log = st.columns(2)
 
     # --- 🆕 Nieuwe registratie ---
     with col_reg:
