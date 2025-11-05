@@ -479,43 +479,67 @@ with tabs[3]:
     colA, colB = st.columns(2)
     enabled = colA.toggle("Herinneringen inschakelen", value=bool(s.get("enabled", 0)))
     sms_enabled = colA.toggle("SMS gebruiken", value=bool(s.get("sms_enabled", 1)))
-    wa_enabled  = colA.toggle("WhatsApp gebruiken", value=bool(s.get("whatsapp_enabled", 0)))
+    wa_enabled = colA.toggle("WhatsApp gebruiken", value=bool(s.get("whatsapp_enabled", 0)))
 
-    days_before = colB.number_input("Dagen op voorhand", min_value=0, max_value=7, value=int(s.get("days_before", 1)))
+    days_before = colB.number_input(
+        "Dagen op voorhand",
+        min_value=0,
+        max_value=7,
+        value=int(s.get("days_before", 1))
+    )
 
-# '09:00' → tijdobject
-send_time_str = (s.get("send_time") or "09:00")
-try:
-    default_time = dt.datetime.strptime(send_time_str, "%H:%M").time()
-except Exception:
-    default_time = dt.time(9, 0)
-send_time = colB.time_input("Verzendtijd", value=default_time)
+    # '09:00' → tijdobject
+    send_time_str = (s.get("send_time") or "09:00")
+    try:
+        default_time = dt.datetime.strptime(send_time_str, "%H:%M").time()
+    except Exception:
+        default_time = dt.time(9, 0)
+    send_time = colB.time_input("Verzendtijd", value=default_time)
 
-same_day = colA.toggle("Extra herinnering op de dag zelf", value=bool(s.get("same_day_enabled", 0)))
-same_day_min = colB.number_input("Minuten vóór afspraak (zelfde dag)", min_value=5, step=5, value=int(s.get("same_day_minutes", 30)))
+    same_day = colA.toggle("Extra herinnering op de dag zelf", value=bool(s.get("same_day_enabled", 0)))
+    same_day_min = colB.number_input(
+        "Minuten vóór afspraak (zelfde dag)",
+        min_value=5,
+        step=5,
+        value=int(s.get("same_day_minutes", 30))
+    )
 
-tz_choices = ["Europe/Brussels", "Europe/Amsterdam", "UTC"]
-tz_value = s.get("tz") or "Europe/Brussels"
-tz = colB.selectbox("Tijdzone", tz_choices, index=tz_choices.index(tz_value) if tz_value in tz_choices else 0)
+    tz_choices = ["Europe/Brussels", "Europe/Amsterdam", "UTC"]
+    tz_value = s.get("tz") or "Europe/Brussels"
+    tz = colB.selectbox(
+        "Tijdzone",
+        tz_choices,
+        index=tz_choices.index(tz_value) if tz_value in tz_choices else 0
+    )
 
-st.markdown("#### 📄 Sjablonen")
-c1, c2 = st.columns(2)
+    st.markdown("#### 📄 Sjablonen")
+    c1, c2 = st.columns(2)
 
-tpl_sms_day_before = c1.text_area(
-    "SMS – dag ervoor",
-    value=s.get("template_day_before_sms") or "Herinnering: je afspraak is morgen om {TIME} bij {COMPANY}. Tot dan!"
-)
+    # --- SMS sjablonen ---
+    tpl_sms_day_before = c1.text_area(
+        "SMS – dag ervoor",
+        value=s.get("template_day_before_sms") or
+        "Herinnering: je afspraak is morgen om {TIME} bij {COMPANY}. Tot dan!"
+    )
 
-tpl_sms_same_day = c1.text_area(
-    "SMS – zelfde dag",
-    value=s.get("template_same_day_sms") or "Herinnering: je afspraak is vandaag om {TIME} bij {COMPANY}."
-)
+    tpl_sms_same_day = c1.text_area(
+        "SMS – zelfde dag",
+        value=s.get("template_same_day_sms") or
+        "Herinnering: je afspraak is vandaag om {TIME} bij {COMPANY}."
+    )
 
-tpl_wa_day_before = c2.text_area(
-    "WhatsApp – dag ervoor",
-    value=s.get("template_day_before_wa") or "👋 Hallo! Herinnering: je afspraak is morgen om {TIME} bij {COMPANY}."
-)
+    # --- WhatsApp sjablonen ---
+    tpl_wa_day_before = c2.text_area(
+        "WhatsApp – dag ervoor",
+        value=s.get("template_day_before_wa") or
+        "👋 Hallo! Herinnering: je afspraak is morgen om {TIME} bij {COMPANY}."
+    )
 
+    tpl_wa_same_day = c2.text_area(
+        "WhatsApp – zelfde dag",
+        value=s.get("template_same_day_wa") or
+        "👋 Hallo! Herinnering: je afspraak is vandaag om {TIME} bij {COMPANY}."
+    )
 
     st.caption("Beschikbare placeholders: {TIME}, {DATE}, {COMPANY}, {NAME} (indien van toepassing).")
 
@@ -535,7 +559,7 @@ tpl_wa_day_before = c2.text_area(
             template_day_before_wa=tpl_wa_day_before,
             template_same_day_wa=tpl_wa_same_day,
         )
-        st.success("Herinneringsinstellingen opgeslagen.")
+        st.success("✅ Herinneringsinstellingen opgeslagen.")
         st.rerun()
 
     # --- Klant-preview ---
