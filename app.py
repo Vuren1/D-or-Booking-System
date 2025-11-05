@@ -230,51 +230,34 @@ if "session_id" in query_params:
     st.success("✅ Betaling ontvangen! Je account is nu actief.")
 
 
-# -----------------------------
-# Auth: registreren / inloggen
-# -----------------------------
-st.title("D'or Booking System")
+# --- Registratie nieuw bedrijf ---
+st.header("🧾 Nieuw bedrijf registreren")
 
-if "logged_in" not in st.session_state:
-    st.subheader("Nieuw bedrijf? Registreer")
-    with st.form("register_form"):
-        r_name = st.text_input("Bedrijfsnaam")
-        r_email = st.text_input("E-mail")
-        r_pwd = st.text_input("Wachtwoord", type="password")
-        submit = st.form_submit_button("Registreren")
-        if submit:
-            if not (r_name and r_email and r_pwd):
-                st.error("Vul alle velden in.")
-            elif get_company_by_email(r_email):
-                st.error("E-mail is al geregistreerd.")
-            else:
-                new_id = add_company(r_name, r_email, r_pwd)
-                st.session_state.company_name = r_name
-                try:
-                    checkout = create_checkout_session(new_id, r_email, r_name)  # payment.py
-                    st.success("Account aangemaakt—activeer via betaling.")
-                    st.markdown(f"[Betaal abonnement (€25/maand)]({checkout})")
-                except Exception as e:
-                    st.error(f"Fout bij aanmaken Stripe sessie: {e}")
+# Gebruikersinvoer
+r_name = st.text_input("Bedrijfsnaam", placeholder="Bijv. Salon Bella")
+r_email = st.text_input("E-mail", placeholder="bijv. info@bella.be")
+r_pwd = st.text_input("Wachtwoord", type="password", placeholder="Minstens 6 tekens")
 
-    st.subheader("Bestaand bedrijf? Log in")
-    l_email = st.text_input("E-mail", key="login_email")
-    l_pwd = st.text_input("Wachtwoord", type="password", key="login_pwd")
-    if st.button("Inloggen"):
-        row = get_company_by_email(l_email)
-        if row and row[3] == l_pwd:
-            st.session_state.logged_in = True
-            st.session_state.company_id = int(row[0])
-            st.session_state.company_name = row[1]
-            st.experimental_set_query_params(company=row[0])
-            st.rerun()
+# Registratieknop
+if st.button("📋 Registreer"):
+    if not r_name or not r_email or not r_pwd:
+        st.error("Vul alle velden in (bedrijfsnaam, e-mail en wachtwoord).")
+    else:
+        # Check of e-mail al bestaat
+        existing = get_company_by_email(r_email)
+        if existing:
+            st.error("⚠️ Dit e-mailadres is al geregistreerd.")
         else:
-            st.error("Onjuiste inloggegevens.")
-    # Als niet ingelogd: laat eventueel klant-pagina zien met ?company=
-    if not st.session_state.get("logged_in", False) and company_id_param:
-        st.divider()
-        st.info("Je ziet hieronder de klant-boekingspagina (demo).")
-else:
+            new_id = add_company(r_name, r_email, r_pwd)
+            if new_id > 0:
+                st.session_state.company_id = new_id
+                st.session_state.company_name = r_name
+                st.success(f"✅ {r_name} is succesvol geregistreerd!")
+                st.balloons()
+                st.rerun()
+            else:
+                st.error("❌ Er ging iets mis bij het registreren. Probeer opnieuw.")
+
     # -----------------------------
     # DASHBOARD (alleen na betaling)
     # -----------------------------
