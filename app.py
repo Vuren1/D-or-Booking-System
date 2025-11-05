@@ -222,8 +222,10 @@ if session_id_param and "logged_in" not in st.session_state:
 from database import activate_company
 
 # ...
-if "session_id" in st.query_params:
-    company_id = int(st.query_params.get("company")[0])
+query_params = st.experimental_get_query_params()
+if "session_id" in query_params:
+    session_id = query_params["session_id"][0]
+    company_id = int(query_params.get("company", [0])[0])
     activate_company(company_id)
     st.success("✅ Betaling ontvangen! Je account is nu actief.")
 
