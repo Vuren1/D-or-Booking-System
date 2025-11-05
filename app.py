@@ -372,6 +372,7 @@ else:
         index=(cat_names.index(row["category"]) if row["category"] in cat_names else 0)
     )
 
+
 print("Expander geladen!")  # ✅ géén extra inspringing
 
 
