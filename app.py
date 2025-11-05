@@ -273,44 +273,77 @@ if st.button("📋 Registreer"):
             pass
         st.stop()
 # ------------------------------------------------
-# ✅ Nieuw: Registratie / login-check
+# ✅ Login & registratie (boven tabs)
 # ------------------------------------------------
 
 if "company_id" not in st.session_state:
-    st.title("D'or Booking System")
-    st.markdown("Nieuw bedrijf? Registreer hieronder:")
+    # Titel bovenaan, gecentreerd
+    st.markdown("<h1 style='text-align: center;'>💎 D'or Booking System</h1>", unsafe_allow_html=True)
+    st.write("Welkom! Registreer als nieuw bedrijf of log in als bestaande klant.")
 
-    r_name = st.text_input("Bedrijfsnaam", placeholder="Bijv. Salon Bella")
-    r_email = st.text_input("E-mail", placeholder="bijv. info@bella.be")
-    r_pwd = st.text_input("Wachtwoord", type="password", placeholder="Minstens 6 tekens")
+    # Twee kolommen: links registratie, rechts login
+    col_reg, col_log = st.columns(2)
 
-    if st.button("📋 Registreer"):
-        if not r_name or not r_email or not r_pwd:
-            st.error("Vul alle velden in (bedrijfsnaam, e-mail en wachtwoord).")
-        else:
-            existing = get_company_by_email(r_email)
-            if existing:
-                st.error("⚠️ Dit e-mailadres is al geregistreerd.")
+    # --- 🆕 Nieuwe registratie ---
+    with col_reg:
+        st.subheader("Nieuw bedrijf registreren")
+        r_name = st.text_input("Bedrijfsnaam", placeholder="Bijv. Salon Bella", key="reg_name")
+        r_email = st.text_input("E-mail", placeholder="bijv. info@bella.be", key="reg_email")
+        r_pwd = st.text_input("Wachtwoord", type="password", placeholder="Minstens 6 tekens", key="reg_pwd")
+
+        if st.button("📋 Registreer", key="register_button"):
+            if not r_name or not r_email or not r_pwd:
+                st.error("Vul alle velden in (bedrijfsnaam, e-mail en wachtwoord).")
             else:
-                new_id = add_company(r_name, r_email, r_pwd)
-                if new_id > 0:
-                    st.session_state.company_id = new_id
-                    st.session_state.company_name = r_name
-                    st.success(f"✅ {r_name} is succesvol geregistreerd!")
-                    st.balloons()
-                    st.rerun()
+                existing = get_company_by_email(r_email)
+                if existing:
+                    st.error("⚠️ Dit e-mailadres is al geregistreerd.")
                 else:
-                    st.error("❌ Er ging iets mis bij het registreren. Probeer opnieuw.")
+                    new_id = add_company(r_name, r_email, r_pwd)
+                    if new_id > 0:
+                        st.session_state.company_id = new_id
+                        st.session_state.company_name = r_name
+                        st.success(f"✅ {r_name} is succesvol geregistreerd!")
+                        st.balloons()
+                        st.rerun()
+                    else:
+                        st.error("❌ Er ging iets mis bij het registreren. Probeer opnieuw.")
 
-    st.stop()  # stop hier → dashboard/tabs niet tonen
+    # --- 🔑 Bestaande klant login ---
+    with col_log:
+        st.subheader("Bestaand bedrijf inloggen")
+        l_email = st.text_input("E-mail", placeholder="bijv. info@bella.be", key="login_email")
+        l_pwd = st.text_input("Wachtwoord", type="password", key="login_pwd")
+
+        if st.button("🔓 Inloggen", key="login_button"):
+            company = get_company_by_email(l_email)
+            if not company:
+                st.error("❌ Geen account gevonden met dit e-mailadres.")
+            elif company[3] != l_pwd:
+                st.error("⚠️ Onjuist wachtwoord.")
+            else:
+                st.session_state.company_id = company[0]
+                st.session_state.company_name = company[1]
+                st.success(f"Welkom terug, {company[1]}!")
+                st.rerun()
+
+    st.stop()  # Stop hier zodat tabs niet zichtbaar zijn
 
 # ------------------------------------------------
-# Bedrijf is ingelogd → Dashboard
+# ✅ Bedrijf is ingelogd → dashboard
 # ------------------------------------------------
 company_id = st.session_state.company_id
 company_name = st.session_state.company_name
 
-st.info(f"💼 Ingelogd als: {company_name}")
+# 💼 Toon naam + uitlogknop naast elkaar
+col_left, col_right = st.columns([3, 1])
+with col_left:
+    st.info(f"💼 Ingelogd als: **{company_name}**")
+with col_right:
+    if st.button("🚪 Uitloggen"):
+        st.session_state.clear()
+        st.success("Je bent uitgelogd.")
+        st.rerun()
 
    # -------------------------------------------------
 # Tabs
