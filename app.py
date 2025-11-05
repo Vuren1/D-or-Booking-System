@@ -200,8 +200,8 @@ def _reminder_settings_block(company_id: int, company_name: str):
 # Query params & auto-activate
 # ------------------------------------------------
 qp = st.query_params
-company_id_param = qp.get("company")         # geeft str of None
-session_id_param = qp.get("session_id")      # geeft str of None
+company_id_param = qp.get("company")     # geeft str of None
+session_id_param = qp.get("session_id")  # geeft str of None
 
 # Stripe terugkomst: activeer + log in
 if session_id_param and "logged_in" not in st.session_state:
@@ -224,10 +224,6 @@ if session_id_param and "logged_in" not in st.session_state:
         st.query_params.pop("session_id", None)
 
 # ...
-query_params = st.experimental_get_query_params()
-if "session_id" in query_params:
-    session_id = query_params["session_id"][0]
-    company_id = int(query_params.get("company", [0])[0])
     activate_company(company_id)
     st.success("✅ Betaling ontvangen! Je account is nu actief.")
 
