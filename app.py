@@ -346,13 +346,25 @@ else:
             st.dataframe(cur, use_container_width=True)
 
             with st.expander("✏️ Bewerken of verwijderen", expanded=False):
-                ids = cur["id"].tolist()
-                edit_id = st.selectbox("Kies dienst", options=ids, format_func=lambda x: f"{x} – {cur[cur['id']==x]['name'].iloc[0]}")
-                row = cur[cur["id"]==edit_id].iloc[0]
-                ec1, ec2, ec3, ec4 = st.columns([2,1,1,1])
-                e_name = ec1.text_input("Naam", value=row["name"], key=f"name_{row['id']}")
-e_price = ec2.number_input("Prijs (€)", value=float(row["price"]), key=f"price_{row['id']}")
-e_dur = ec3.number_input("Duur (minuten)", min_value=5, step=5, value=int(row["duration"]), key=f"dur_{row['id']}")
+    ids = cur["id"].tolist()
+    edit_id = st.selectbox(
+        "Kies dienst",
+        options=ids,
+        format_func=lambda x: f"{x} – {cur[cur['id'] == x]['name'].iloc[0]}"
+    )
+    row = cur[cur["id"] == edit_id].iloc[0]
+
+    ec1, ec2, ec3, ec4 = st.columns([2, 1, 1, 1])
+
+    e_name = ec1.text_input("Naam", value=row["name"], key=f"name_{row['id']}")
+    e_price = ec2.number_input("Prijs (€)", value=float(row["price"]), key=f"price_{row['id']}")
+    e_dur = ec3.number_input(
+        "Duur (minuten)",
+        min_value=5,
+        step=5,
+        value=int(row["duration"]),
+        key=f"dur_{row['id']}"
+    )
 
                 e_cat = ec4.selectbox("Categorie", options=cat_names, index=(cat_names.index(row["category"]) if row["category"] in cat_names else 0))
                 e_desc = st.text_area("Beschrijving", value=row["description"] or "", height=90)
