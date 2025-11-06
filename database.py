@@ -1,18 +1,29 @@
 import os
-import sqlite3
 import re
-import pandas as pd
-from datetime import datetime, time as dtime, timedelta
+import sqlite3
+from datetime import datetime, date as ddate, time as dtime, timedelta
+from typing import Iterable, List, Optional, Tuple
 
-# =================================================
-# Pad + DB-bestand
-# =================================================
+import pandas as pd
+
+# =============================
+# DB setup
+# =============================
 os.makedirs("data", exist_ok=True)
 DB_NAME = "data/bookings.db"
 
 
+def get_connection() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
+    conn.execute("PRAGMA journal_mode = WAL;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    return conn
+
+
 def _slugify(name: str) -> str:
-    """Maak een nette slug op basis van de bedrijfsnaam."""
     if not name:
         return "bedrijf"
     value = name.strip().lower()
@@ -21,19 +32,8 @@ def _slugify(name: str) -> str:
     return value or "bedrijf"
 
 
-def get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_NAME, check_same_thread=False)
-    conn.execute("PRAGMA foreign_keys = ON;")
-    conn.execute("PRAGMA journal_mode = WAL;")
-    conn.execute("PRAGMA synchronous = NORMAL;")
-    conn.execute("PRAGMA busy_timeout = 5000;")
-    return conn
-
-
 def init_db():
-    """
-    Maakt tabellen indien nodig + simpele migraties.
-    """
+    """Maak/migreer alle tabellen. Veilig om meerdere keren uit te voeren."""
     conn = get_connection()
     c = conn.cursor()
 
@@ -50,28 +50,24 @@ def init_db():
             slug       TEXT    UNIQUE,
             logo_path  TEXT
         )
-    """
+        """
     )
+    # Migraties voor oude DB's
+    for col, ddl in [
+        ("slug", "ALTER TABLE companies ADD COLUMN slug TEXT UNIQUE"),
+        ("logo_path", "ALTER TABLE companies ADD COLUMN logo_path TEXT"),
+    ]:
+        try:
+            c.execute(ddl)
+        except Exception:
+            pass
 
-    # Migraties voor bestaande DB's
+    # Vul slugs voor bestaande bedrijven
     try:
-        c.execute("ALTER TABLE companies ADD COLUMN slug TEXT UNIQUE")
-    except Exception:
-        pass
-
-    try:
-        c.execute("ALTER TABLE companies ADD COLUMN logo_path TEXT")
-    except Exception:
-        pass
-
-    # Slugs vullen indien leeg
-    try:
-        c.execute(
-            "SELECT id, name FROM companies WHERE slug IS NULL OR slug = ''"
-        )
-        rows = c.fetchall()
-        for cid, name in rows:
-            base = _slugify(name)
+        c.execute("SELECT id, name FROM companies WHERE slug IS NULL OR slug = ''")
+        for row in c.fetchall():
+            cid, nm = int(row[0]), str(row[1])
+            base = _slugify(nm)
             slug = base
             i = 1
             while True:
@@ -80,10 +76,7 @@ def init_db():
                     break
                 i += 1
                 slug = f"{base}-{i}"
-            c.execute(
-                "UPDATE companies SET slug=? WHERE id=?", (slug, cid)
-            )
-        conn.commit()
+            c.execute("UPDATE companies SET slug=? WHERE id=?", (slug, cid))
     except Exception:
         pass
 
@@ -95,40 +88,41 @@ def init_db():
             company_id  INTEGER NOT NULL,
             name        TEXT NOT NULL,
             description TEXT,
+            UNIQUE(company_id, name),
             FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
         )
-    """
+        """
     )
 
     # Diensten
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS services (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_id INTEGER NOT NULL,
-            name       TEXT NOT NULL,
-            price      REAL NOT NULL DEFAULT 0,
-            duration   INTEGER NOT NULL DEFAULT 0,
-            category   TEXT,
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id  INTEGER NOT NULL,
+            name        TEXT NOT NULL,
+            price       REAL NOT NULL DEFAULT 0,
+            duration    INTEGER NOT NULL DEFAULT 0,
+            category    TEXT,              -- vrije tekst of naam uit categories
             description TEXT,
-            is_active  INTEGER NOT NULL DEFAULT 1,
+            is_active   INTEGER NOT NULL DEFAULT 1,
             FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
         )
-    """
+        """
     )
 
     # Beschikbaarheid
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS availability (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_id INTEGER NOT NULL,
-            day        TEXT NOT NULL,
-            start_time TEXT NOT NULL,
-            end_time   TEXT NOT NULL,
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id  INTEGER NOT NULL,
+            day         TEXT NOT NULL,     -- Maandag ... Zondag
+            start_time  TEXT NOT NULL,     -- HH:MM
+            end_time    TEXT NOT NULL,     -- HH:MM
             FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
         )
-    """
+        """
     )
 
     # Boekingen (header)
@@ -138,14 +132,14 @@ def init_db():
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             company_id  INTEGER NOT NULL,
             customer    TEXT,
-            date        TEXT NOT NULL,
-            start_time  TEXT NOT NULL,
-            end_time    TEXT NOT NULL,
+            date        TEXT NOT NULL,     -- YYYY-MM-DD
+            start_time  TEXT NOT NULL,     -- HH:MM
+            end_time    TEXT NOT NULL,     -- HH:MM
             total_price REAL NOT NULL DEFAULT 0,
             created_at  TEXT,
             FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
         )
-    """
+        """
     )
 
     # Boekingsregels
@@ -160,31 +154,31 @@ def init_db():
             duration    INTEGER,
             FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
         )
-    """
+        """
     )
 
-    # Reminder settings
+    # Herinneringen
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS reminder_settings (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_id  INTEGER NOT NULL,
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id   INTEGER NOT NULL,
             offset_hours INTEGER NOT NULL DEFAULT 24,
-            active      INTEGER NOT NULL DEFAULT 0,
+            active       INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(company_id),
             FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
         )
-    """
+        """
     )
 
     conn.commit()
     conn.close()
 
 
-# =================================================
+# =============================
 # Companies
-# =================================================
+# =============================
 def add_company(name: str, email: str, password: str) -> int:
-    """Voegt een nieuw bedrijf toe en geeft ID terug."""
     conn = get_connection()
     try:
         c = conn.cursor()
@@ -194,7 +188,7 @@ def add_company(name: str, email: str, password: str) -> int:
         slug = base
         i = 1
         while True:
-            c.execute("SELECT 1 FROM companies WHERE slug = ?", (slug,))
+            c.execute("SELECT 1 FROM companies WHERE slug=?", (slug,))
             if not c.fetchone():
                 break
             i += 1
@@ -208,66 +202,25 @@ def add_company(name: str, email: str, password: str) -> int:
         conn.commit()
         return c.lastrowid
     except Exception as e:
-        print(f"❌ Fout bij toevoegen van bedrijf: {e}")
+        print("add_company error:", e)
         return -1
     finally:
         conn.close()
 
 
-def get_company_by_email(email: str):
+def get_company(company_id: int):
     conn = get_connection()
     c = conn.cursor()
-    c.execute(
-        "SELECT * FROM companies WHERE lower(email)=lower(?)", (email,)
-    )
+    c.execute("SELECT * FROM companies WHERE id=?", (company_id,))
     row = c.fetchone()
     conn.close()
     return row
 
 
-def is_company_paid(company_id: int) -> bool:
+def get_company_by_email(email: str):
     conn = get_connection()
     c = conn.cursor()
-    c.execute(
-        "SELECT paid FROM companies WHERE id=?", (company_id,)
-    )
-    row = c.fetchone()
-    conn.close()
-    return bool(row and row[0])
-
-
-def update_company_paid(company_id: int, paid: bool):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute(
-        "UPDATE companies SET paid=? WHERE id=?",
-        (1 if paid else 0, company_id),
-    )
-    conn.commit()
-    conn.close()
-
-
-def activate_company(company_id: int):
-    update_company_paid(company_id, True)
-
-
-def get_company_name_by_id(company_id: int) -> str | None:
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute(
-        "SELECT name FROM companies WHERE id=?", (company_id,)
-    )
-    row = c.fetchone()
-    conn.close()
-    return row[0] if row else None
-
-
-def get_company(company_id: int):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute(
-        "SELECT * FROM companies WHERE id=?", (company_id,)
-    )
+    c.execute("SELECT * FROM companies WHERE lower(email)=lower(?)", (email,))
     row = c.fetchone()
     conn.close()
     return row
@@ -276,33 +229,35 @@ def get_company(company_id: int):
 def get_company_by_slug(slug: str):
     conn = get_connection()
     c = conn.cursor()
-    c.execute(
-        "SELECT * FROM companies WHERE slug=?", (slug,)
-    )
+    c.execute("SELECT * FROM companies WHERE slug=?", (slug,))
     row = c.fetchone()
     conn.close()
     return row
 
 
-def get_company_slug(company_id: int) -> str | None:
+def get_company_slug(company_id: int) -> Optional[str]:
     conn = get_connection()
     c = conn.cursor()
-    c.execute(
-        "SELECT slug FROM companies WHERE id=?", (company_id,)
-    )
+    c.execute("SELECT slug FROM companies WHERE id=?", (company_id,))
     row = c.fetchone()
     conn.close()
     return row[0] if row and row[0] else None
+
+
+def get_company_name_by_id(company_id: int) -> Optional[str]:
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT name FROM companies WHERE id=?", (company_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else None
 
 
 def set_company_logo(company_id: int, logo_path: str) -> bool:
     conn = get_connection()
     try:
         c = conn.cursor()
-        c.execute(
-            "UPDATE companies SET logo_path=? WHERE id=?",
-            (logo_path, company_id),
-        )
+        c.execute("UPDATE companies SET logo_path=? WHERE id=?", (logo_path, company_id))
         conn.commit()
         return True
     except Exception:
@@ -311,22 +266,38 @@ def set_company_logo(company_id: int, logo_path: str) -> bool:
         conn.close()
 
 
-def get_company_logo(company_id: int) -> str | None:
+def get_company_logo(company_id: int) -> Optional[str]:
     conn = get_connection()
     c = conn.cursor()
-    c.execute(
-        "SELECT logo_path FROM companies WHERE id=?", (company_id,)
-    )
+    c.execute("SELECT logo_path FROM companies WHERE id=?", (company_id,))
     row = c.fetchone()
     conn.close()
     return row[0] if row and row[0] else None
 
 
+def is_company_paid(company_id: int) -> bool:
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT paid FROM companies WHERE id=?", (company_id,))
+    row = c.fetchone()
+    conn.close()
+    return bool(row and row[0])
+
+
+def update_company_paid(company_id: int, paid: bool):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE companies SET paid=? WHERE id=?", (1 if paid else 0, company_id))
+    conn.commit()
+    conn.close()
+
+
+def activate_company(company_id: int):
+    update_company_paid(company_id, True)
+
+
 def update_company_profile(
-    company_id: int,
-    name: str,
-    email: str,
-    password: str | None = None,
+    company_id: int, name: str, email: str, password: Optional[str] = None
 ) -> bool:
     conn = get_connection()
     try:
@@ -341,6 +312,7 @@ def update_company_profile(
                 "UPDATE companies SET name=?, email=? WHERE id=?",
                 (name, email, company_id),
             )
+        # Slug eventueel bijwerken bij naamswijziging? Nee: stabiel houden.
         conn.commit()
         return True
     except Exception:
@@ -348,4 +320,396 @@ def update_company_profile(
     finally:
         conn.close()
 
-# (rest van je categories / services / slots / reminders functies zoals in je originele bestand)
+
+# =============================
+# Categories
+# =============================
+def get_categories(company_id: int) -> pd.DataFrame:
+    conn = get_connection()
+    df = pd.read_sql_query(
+        "SELECT id, name, description FROM categories WHERE company_id=? ORDER BY name",
+        conn,
+        params=(company_id,),
+    )
+    conn.close()
+    return df
+
+
+def add_category(company_id: int, name: str, description: str = "") -> int:
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(
+            "INSERT OR IGNORE INTO categories (company_id, name, description) VALUES (?,?,?)",
+            (company_id, name, description),
+        )
+        conn.commit()
+        # haal id op
+        c.execute(
+            "SELECT id FROM categories WHERE company_id=? AND name=?",
+            (company_id, name),
+        )
+        row = c.fetchone()
+        return int(row[0]) if row else -1
+    finally:
+        conn.close()
+
+
+def upsert_category(company_id: int, name: str, description: str = "") -> int:
+    cid = add_category(company_id, name, description)
+    return cid
+
+
+# =============================
+# Services
+# =============================
+def get_services(company_id: int) -> pd.DataFrame:
+    conn = get_connection()
+    df = pd.read_sql_query(
+        """
+        SELECT id, name, price, duration, category, description, is_active
+        FROM services
+        WHERE company_id=?
+        ORDER BY COALESCE(category, ''), name
+        """,
+        conn,
+        params=(company_id,),
+    )
+    conn.close()
+    return df
+
+
+def add_service(
+    company_id: int,
+    name: str,
+    price: float,
+    duration: int,
+    category: Optional[str] = None,
+    description: str = "",
+    is_active: bool = True,
+) -> int:
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO services (company_id, name, price, duration, category, description, is_active)
+            VALUES (?,?,?,?,?,?,?)
+            """,
+            (company_id, name, price, duration, category, description, 1 if is_active else 0),
+        )
+        conn.commit()
+        return c.lastrowid
+    finally:
+        conn.close()
+
+
+def update_service(
+    service_id: int,
+    name: Optional[str] = None,
+    price: Optional[float] = None,
+    duration: Optional[int] = None,
+    category: Optional[str] = None,
+    description: Optional[str] = None,
+    is_active: Optional[bool] = None,
+) -> bool:
+    sets = []
+    params: List = []
+    if name is not None:
+        sets.append("name=?")
+        params.append(name)
+    if price is not None:
+        sets.append("price=?")
+        params.append(price)
+    if duration is not None:
+        sets.append("duration=?")
+        params.append(duration)
+    if category is not None:
+        sets.append("category=?")
+        params.append(category)
+    if description is not None:
+        sets.append("description=?")
+        params.append(description)
+    if is_active is not None:
+        sets.append("is_active=?")
+        params.append(1 if is_active else 0)
+
+    if not sets:
+        return True
+
+    params.append(service_id)
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(f"UPDATE services SET {', '.join(sets)} WHERE id=?", params)
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def delete_service(service_id: int) -> bool:
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute("DELETE FROM services WHERE id=?", (service_id,))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def set_service_active(service_id: int, active: bool) -> bool:
+    return update_service(service_id, is_active=active)
+
+
+def get_public_services(company_id: int) -> pd.DataFrame:
+    """Alleen gepubliceerde (is_active=1) diensten."""
+    conn = get_connection()
+    df = pd.read_sql_query(
+        """
+        SELECT name, price, duration, category, description
+        FROM services
+        WHERE company_id=? AND is_active=1
+        ORDER BY COALESCE(category, ''), name
+        """,
+        conn,
+        params=(company_id,),
+    )
+    conn.close()
+    return df
+
+
+# =============================
+# Availability
+# =============================
+_DUTCH_DAYS = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"]
+
+
+def add_availability(company_id: int, day: str, start_time: dtime, end_time: dtime) -> int:
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO availability (company_id, day, start_time, end_time)
+            VALUES (?,?,?,?)
+            """,
+            (company_id, day, start_time.strftime("%H:%M"), end_time.strftime("%H:%M")),
+        )
+        conn.commit()
+        return c.lastrowid
+    finally:
+        conn.close()
+
+
+def get_availability(company_id: int) -> pd.DataFrame:
+    conn = get_connection()
+    df = pd.read_sql_query(
+        """
+        SELECT id, day, start_time, end_time
+        FROM availability
+        WHERE company_id=?
+        ORDER BY
+          CASE day
+            WHEN 'Maandag' THEN 1 WHEN 'Dinsdag' THEN 2 WHEN 'Woensdag' THEN 3
+            WHEN 'Donderdag' THEN 4 WHEN 'Vrijdag' THEN 5 WHEN 'Zaterdag' THEN 6
+            WHEN 'Zondag' THEN 7 ELSE 8 END,
+          start_time
+        """,
+        conn,
+        params=(company_id,),
+    )
+    conn.close()
+    return df
+
+
+# =============================
+# Slotberekening (eenvoudig)
+# =============================
+def _time_to_minutes(t: dtime) -> int:
+    return t.hour * 60 + t.minute
+
+
+def _minutes_to_time(m: int) -> dtime:
+    return (datetime(2000, 1, 1) + timedelta(minutes=m)).time()
+
+
+def get_available_slots_for_duration(
+    company_id: int, target_date: ddate, duration_minutes: int, step_minutes: int = 15
+) -> List[str]:
+    """Return lijst HH:MM starttijden die passen binnen openingstijden minus bestaande boekingen."""
+    # 1) Openingstijden voor die dag
+    weekday_idx = (target_date.weekday())  # 0=ma
+    day_name = _DUTCH_DAYS[weekday_idx]
+
+    avail = get_availability(company_id)
+    avail = avail[avail["day"] == day_name]
+    if avail.empty:
+        return []
+
+    # 2) Bestaande boekingen op die datum
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        "SELECT start_time, end_time FROM bookings WHERE company_id=? AND date=?",
+        (company_id, target_date.strftime("%Y-%m-%d")),
+    )
+    busy = [(row[0], row[1]) for row in c.fetchall()]
+    conn.close()
+
+    busy_ranges: List[Tuple[int, int]] = []
+    for s, e in busy:
+        st_m = int(s.split(":")[0]) * 60 + int(s.split(":")[1])
+        en_m = int(e.split(":")[0]) * 60 + int(e.split(":")[1])
+        busy_ranges.append((st_m, en_m))
+
+    def is_free(start_m: int, end_m: int) -> bool:
+        for bs, be in busy_ranges:
+            if not (end_m <= bs or start_m >= be):
+                return False
+        return True
+
+    slots: List[str] = []
+    for _, row in avail.iterrows():
+        start = row["start_time"]
+        end = row["end_time"]
+        start_m = int(start.split(":")[0]) * 60 + int(start.split(":")[1])
+        end_m = int(end.split(":")[0]) * 60 + int(end.split(":")[1])
+
+        cur = start_m
+        while cur + duration_minutes <= end_m:
+            if is_free(cur, cur + duration_minutes):
+                hh = cur // 60
+                mm = cur % 60
+                slots.append(f"{hh:02d}:{mm:02d}")
+            cur += step_minutes
+
+    return slots
+
+
+# =============================
+# Bookings
+# =============================
+def add_booking_with_items(
+    company_id: int,
+    customer: str,
+    date_str: str,       # "YYYY-MM-DD"
+    start_time: str,     # "HH:MM"
+    items: Iterable[dict],  # [{'service_id':..., 'name':..., 'price':..., 'duration':...}, ...]
+) -> int:
+    """Maak een boeking + regels; berekent end_time & total_price automatisch."""
+    total_minutes = 0
+    total_price = 0.0
+    items_list = list(items)
+
+    for it in items_list:
+        total_minutes += int(it.get("duration", 0))
+        total_price += float(it.get("price", 0))
+
+    st_h, st_m = map(int, start_time.split(":"))
+    start_dt = datetime.strptime(f"{date_str} {st_h:02d}:{st_m:02d}", "%Y-%m-%d %H:%M")
+    end_dt = start_dt + timedelta(minutes=total_minutes)
+    end_time = end_dt.strftime("%H:%M")
+
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO bookings (company_id, customer, date, start_time, end_time, total_price, created_at)
+            VALUES (?,?,?,?,?,?,?)
+            """,
+            (company_id, customer, date_str, start_time, end_time, total_price, datetime.utcnow().isoformat()),
+        )
+        bid = c.lastrowid
+
+        for it in items_list:
+            c.execute(
+                """
+                INSERT INTO booking_items (booking_id, service_id, name, price, duration)
+                VALUES (?,?,?,?,?)
+                """,
+                (bid, it.get("service_id"), it.get("name"), it.get("price"), it.get("duration")),
+            )
+
+        conn.commit()
+        return bid
+    finally:
+        conn.close()
+
+
+def get_bookings(company_id: int) -> pd.DataFrame:
+    conn = get_connection()
+    df = pd.read_sql_query(
+        """
+        SELECT id, customer, date, start_time, end_time, total_price
+        FROM bookings
+        WHERE company_id=?
+        ORDER BY date DESC, start_time DESC
+        """,
+        conn,
+        params=(company_id,),
+    )
+    conn.close()
+    return df
+
+
+def get_bookings_overview(company_id: int) -> pd.DataFrame:
+    conn = get_connection()
+    df = pd.read_sql_query(
+        """
+        SELECT
+            date,
+            COUNT(*) AS total_bookings,
+            SUM(total_price) AS revenue
+        FROM bookings
+        WHERE company_id=?
+        GROUP BY date
+        ORDER BY date DESC
+        """,
+        conn,
+        params=(company_id,),
+    )
+    conn.close()
+    return df
+
+
+# =============================
+# Reminders
+# =============================
+def get_reminder_settings(company_id: int) -> pd.DataFrame:
+    conn = get_connection()
+    df = pd.read_sql_query(
+        """
+        SELECT offset_hours, active
+        FROM reminder_settings
+        WHERE company_id=?
+        """,
+        conn,
+        params=(company_id,),
+    )
+    conn.close()
+    if df.empty:
+        return pd.DataFrame([{"offset_hours": 24, "active": 0}])
+    return df
+
+
+def upsert_reminder_settings(company_id: int, offset_hours: int, active: bool) -> bool:
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO reminder_settings (company_id, offset_hours, active)
+            VALUES (?,?,?)
+            ON CONFLICT(company_id) DO UPDATE
+            SET offset_hours=excluded.offset_hours,
+                active=excluded.active
+            """,
+            (company_id, offset_hours, 1 if active else 0),
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
