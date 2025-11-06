@@ -1,70 +1,86 @@
 # app.py — D’or Booking System (Streamlit)
 # =========================================
-# Vereist: database.py zoals eerder opgeleverd, plus `pip install streamlit pandas`
 # Start lokaal met:  streamlit run app.py
 
 from __future__ import annotations
 
 import os
-from typing import List, Dict, Any
+from typing import Any
 
 import pandas as pd
 import streamlit as st
 from datetime import date as _date, datetime, timedelta
 
-# ---- Database laag
 from database import (
     # init & companies
-    init_db, get_company_name_by_id, add_company, get_company_by_email, get_company,
-    activate_company, is_company_paid, update_company_profile,
-    # categories & services  (⚠️ upsert_category NIET hier importeren)
-    get_categories, add_category, get_services, add_service, update_service, delete_service,
-    set_service_active, get_public_services,
+    init_db,
+    get_company_name_by_id,
+    add_company,
+    get_company_by_email,
+    get_company,
+    get_company_by_slug,
+    get_company_slug,
+    activate_company,
+    is_company_paid,
+    update_company_profile,
+    set_company_logo,
+    get_company_logo,
+    # categories & services
+    get_categories,
+    add_category,
+    get_services,
+    add_service,
+    update_service,
+    delete_service,
+    set_service_active,
+    get_public_services,
     # availability
-    add_availability, get_availability,
+    add_availability,
+    get_availability,
     # bookings & slots
-    get_available_slots_for_duration, add_booking_with_items,
-    get_bookings_overview, get_bookings,
+    get_available_slots_for_duration,
+    add_booking_with_items,
+    get_bookings_overview,
+    get_bookings,
     # reminders
-    get_reminder_settings, upsert_reminder_settings,
+    get_reminder_settings,
+    upsert_reminder_settings,
 )
 
-# --- Veilige import voor upsert_category (met fallback) ---
+# Logo voor de publieke loginpagina (rechts). Pas deze zelf aan.
+APP_LOGO_URL = os.getenv("APP_LOGO_URL", "")
+
+# Veilig fallback voor upsert_category
 try:
-    from database import upsert_category as _upsert_category  # nieuwe/gewilde versie
+    from database import upsert_category as _upsert_category  # type: ignore
 except Exception:
     _upsert_category = None
 
+
 def upsert_category(company_id: int, name: str, description: str = ""):
     """
-    Gebruik database.upsert_category als die bestaat; anders val terug op:
-    - bestaat categorie al? -> update beschrijving
-    - anders -> voeg categorie toe
+    Gebruik database.upsert_category als die bestaat; anders simpele fallback.
     """
     if _upsert_category is not None:
         return _upsert_category(company_id, name, description)
 
-    # Fallback zonder harde afhankelijkheid:
     from database import (
         get_categories as _get_categories,
         add_category as _add_category,
-        update_category as _update_category,
     )
-    df = _get_categories(company_id)
-    if not df.empty and name in df["name"].astype(str).tolist():
-        row = df[df["name"] == name].iloc[0]
-        return _update_category(int(row["id"]), name, description)
-    else:
-        return _add_category(company_id, name, description)
 
-# Init DB vroeg zodat migraties meteen lopen
-init_db()
+    cats = _get_categories(company_id)
+    if not cats.empty and name in list(cats["name"]):
+        return
+    _add_category(company_id, name, description)
+
 
 # =========================================
 # Init
 # =========================================
 st.set_page_config(page_title="D’or Booking System", page_icon="💫", layout="wide")
-init_db()  # migraties/PRAGMA/indexes
+init_db()
+
 
 # =========================================
 # Helpers
@@ -75,453 +91,370 @@ def _format_money(x: Any) -> str:
     except Exception:
         return "€0,00"
 
-def _date_to_str(d: _date) -> str:
-    return d.strftime("%Y-%m-%d")
-
-def _success(msg: str):
-    st.success(msg, icon="✅")
-
-def _error(msg: str):
-    st.error(msg, icon="❌")
 
 def _info(msg: str):
-    st.info(msg, icon="ℹ️")
+    st.info(msg)
+
+
+def _success(msg: str):
+    st.success(msg)
+
+
+def _error(msg: str):
+    st.error(msg)
+
 
 # =========================================
-# Auth / Company context (simpel & duidelijk)
+# Login / registratie / sessie
 # =========================================
 def _select_or_create_company() -> int | None:
+    """
+    Regelt:
+    - bestaande sessie
+    - inloggen
+    - nieuw bedrijf registreren
+    - company uit mooie URL (?company=slug)
+    """
     params = st.experimental_get_query_params()
     param_company = params.get("company", [None])[0]
 
-    with st.sidebar:
-        st.markdown("### Account")
-        if "company_id" in st.session_state:
-            cid = st.session_state["company_id"]
-            name = get_company_name_by_id(cid)
+    # 1) Bestaande sessie
+    if "company_id" in st.session_state:
+        cid = st.session_state["company_id"]
+        with st.sidebar:
+            st.markdown("### Account")
+            name = get_company_name_by_id(cid) or "Onbekend bedrijf"
             st.markdown(f"**Ingelogd als:** {name} (#{cid})")
-            if st.button("Uitloggen"):
+            if st.button("Uitloggen", key="logout_btn", use_container_width=True):
                 st.session_state.clear()
                 st.experimental_set_query_params()
                 st.rerun()
+        return cid
+
+    # 2) Company uit URL (slug of numeriek id)
+    if param_company:
+        value = str(param_company)
+        row = get_company_by_slug(value)
+        if not row and value.isdigit():
+            try:
+                row = get_company(int(value))
+            except Exception:
+                row = None
+        if row:
+            cid = int(row[0])
+            st.session_state["company_id"] = cid
             return cid
 
-        # 1) via URL parameter
-        if param_company and str(param_company).isdigit():
-            st.session_state["company_id"] = int(param_company)
-            return st.session_state["company_id"]
-
-        # 2) eenvoudig login/aanmaak
+    # 3) Login / Registratie UI
+    with st.sidebar:
+        st.markdown("### Account")
         tabs = st.tabs(["Inloggen", "Nieuw bedrijf"])
+
+        # --- Inloggen ---
         with tabs[0]:
-            email = st.text_input("E-mail")
-            password = st.text_input("Wachtwoord", type="password")
-            if st.button("Inloggen", use_container_width=True):
-                row = get_company_by_email(email.strip())
+            login_email = st.text_input("E-mail", key="login_email")
+            login_password = st.text_input(
+                "Wachtwoord", type="password", key="login_password"
+            )
+            if st.button("Inloggen", use_container_width=True, key="login_btn"):
+                row = get_company_by_email(login_email.strip())
                 if not row:
                     _error("Onbekende e-mail.")
                 else:
-                    # row = (id, name, email, password, paid, created_at)
-                    if password and password == row[3]:
-                        st.session_state["company_id"] = int(row[0])
+                    if login_password and login_password == row[3]:
+                        cid = int(row[0])
+                        st.session_state["company_id"] = cid
+                        slug = get_company_slug(cid) or str(cid)
+                        st.experimental_set_query_params(company=slug)
                         _success("Ingelogd.")
-                        st.experimental_set_query_params(company=str(row[0]))
                         st.rerun()
                     else:
-                        _error("Onjuist wachtwoord.")
+                        _error("Ongeldig wachtwoord.")
 
+        # --- Nieuw bedrijf ---
         with tabs[1]:
-            name = st.text_input("Bedrijfsnaam")
-            email = st.text_input("E-mail (login)")
-            password = st.text_input("Wachtwoord", type="password")
-            if st.button("Aanmaken", type="primary", use_container_width=True, key="create_company"):
-                if not name or not email or not password:
-                    _error("Vul naam, e-mail en wachtwoord in.")
+            reg_name = st.text_input("Bedrijfsnaam", key="reg_name")
+            reg_email = st.text_input("E-mail", key="reg_email")
+            reg_password = st.text_input(
+                "Wachtwoord", type="password", key="reg_password"
+            )
+            if st.button(
+                "Aanmaken",
+                type="primary",
+                use_container_width=True,
+                key="create_company",
+            ):
+                if not reg_name or not reg_email or not reg_password:
+                    _error("Vul Bedrijfsnaam, e-mail en wachtwoord in.")
                 else:
-                    cid = add_company(name.strip(), email.strip(), password)
+                    cid = add_company(
+                        reg_name.strip(), reg_email.strip(), reg_password
+                    )
                     if cid > 0:
                         st.session_state["company_id"] = cid
+                        slug = get_company_slug(cid) or str(cid)
+                        st.experimental_set_query_params(company=slug)
                         _success("Bedrijf aangemaakt.")
-                        st.experimental_set_query_params(company=str(cid))
                         st.rerun()
                     else:
-                        _error("Kon bedrijf niet aanmaken.")
+                        _error(
+                            "Kon bedrijf niet aanmaken. Mogelijk bestaat dit e-mailadres al."
+                        )
     return None
 
+
+# =========================================
+# Start app: check login
+# =========================================
 company_id = _select_or_create_company()
 if not company_id:
+    # Alleen login/registratie in de sidebar,
+    # rechts tonen we een logo of placeholder.
+    col_left, col_right = st.columns([1, 2])
+    with col_right:
+        if APP_LOGO_URL:
+            st.image(APP_LOGO_URL, use_column_width=False)
+        else:
+            st.markdown("## D’or Booking System")
+            st.caption(
+                "Plaats hier je eigen logo door de variabele `APP_LOGO_URL` in `app.py` aan te passen."
+            )
     st.stop()
 
 company_name = get_company_name_by_id(company_id)
+company_logo = get_company_logo(company_id)
+company_slug = get_company_slug(company_id)
 
 # =========================================
-# Sidebar: snelle navigatie
+# Header
+# =========================================
+# Toon bedrijfslogo (indien ingesteld) mooi in het midden bovenaan
+if company_logo:
+    st.markdown(
+        f'<div style="text-align:center; margin-top:0.5rem; margin-bottom:1rem;">'
+        f'<img src="{company_logo}" alt="{company_name}" style="max-height:80px;"></div>',
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        '<div style="text-align:center; margin-top:0.5rem; margin-bottom:1rem;">'
+        '<span style="font-size:40px;">💫</span>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+st.markdown(f"### Beheeromgeving voor **{company_name}**")
+if company_slug:
+    st.caption(
+        "Jouw publieke boekingslink (deel met klanten): "
+        f"`?company={company_slug}&view=public`"
+    )
+
+# =========================================
+# Sidebar navigatie (alleen na login)
 # =========================================
 with st.sidebar:
     st.markdown("### Navigatie")
-    if st.button("Bekijk publieke catalogus", use_container_width=True):
-        params = st.experimental_get_query_params()
-        params["view"] = ["public"]
-        params["company"] = [str(company_id)]
-        st.experimental_set_query_params(**params)
+    if st.button("Beheeromgeving", use_container_width=True):
+        st.experimental_set_query_params(company=(company_slug or company_id), view="admin")
+        st.rerun()
+    if st.button("Publieke catalogus bekijken", use_container_width=True):
+        st.experimental_set_query_params(company=(company_slug or company_id), view="public")
         st.rerun()
 
 # =========================================
-# URL mode: public vs admin
+# URL mode: admin of public
 # =========================================
 params = st.experimental_get_query_params()
 view_mode = params.get("view", ["admin"])[0]  # 'admin' of 'public'
 
 # =========================================
-# Header
-# =========================================
-colA, colB = st.columns([1, 3], vertical_alignment="center")
-with colA:
-    st.image("https://static-00.iconduck.com/assets.00/sparkles-emoji-512x512-3jn4x2cw.png", width=64)
-with colB:
-    st.markdown(f"## Welkom, **{company_name}**")
-
-# =========================================
-# Public catalogus (read-only) — geen selectievakjes/boeken
+# Public catalogus (read-only)
 # =========================================
 def render_public_catalog(cid: int):
-    st.markdown("### Diensten & tarieven")
+    st.markdown("### Diensten & tarieven (publiek)")
     df = get_public_services(cid)
     if df.empty:
         _info("Er zijn nog geen gepubliceerde diensten.")
         return
 
-    for cat, grp in df.groupby(df["category"].fillna("Algemeen")):
-        with st.expander(cat, expanded=True):
-            for _, r in grp.iterrows():
-                st.markdown(f"**{r['name']}** — {_format_money(r['price'])} • {int(r['duration'])} min")
-                if r.get("description"):
-                    st.caption(r["description"])
-                st.divider()
-
-if view_mode == "public":
-    st.info("Publieke weergave (alleen lezen).", icon="🌐")
-    if st.button("⤺ Terug naar beheer"):
-        params["view"] = ["admin"]
-        st.experimental_set_query_params(**params)
-        st.rerun()
-    render_public_catalog(company_id)
-    st.stop()
-
-# =========================================
-# Tabs (beheer + klant preview)
-# =========================================
-tab_overview, tab_services, tab_availability, tab_reminders, tab_client, tab_appointments, tab_account = st.tabs(
-    ["Overzicht", "Diensten", "Beschikbaarheid", "Herinneringen", "Klant-preview", "Afspraken", "Account"]
-)
-
-# -----------------------------------------
-# Overzicht
-# -----------------------------------------
-with tab_overview:
-    st.subheader("Overzicht")
-    # Kennismaking + wat cijfers
-    cur_services = get_services(company_id)
-    cur_bookings = get_bookings_overview(company_id)
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Diensten", len(cur_services))
-    m2.metric("Afspraken", len(cur_bookings))
-    total_rev = cur_bookings["total_price"].sum() if not cur_bookings.empty else 0
-    m3.metric("Totale omzet", _format_money(total_rev))
-
-    st.markdown("#### Laatste afspraken")
-    if cur_bookings.empty:
-        _info("Nog geen afspraken.")
+    if "category" in df.columns:
+        for cat, grp in df.groupby("category"):
+            label = str(cat) if str(cat).strip() else "Overige diensten"
+            with st.expander(label, expanded=True):
+                for _, r in grp.iterrows():
+                    st.markdown(
+                        f"**{r['name']}** — {_format_money(r['price'])} • {int(r['duration'])} min"
+                    )
+                    if r.get("description"):
+                        st.caption(str(r["description"]))
+                    st.divider()
     else:
-        df = cur_bookings.copy()
-        df["total_price"] = df["total_price"].map(_format_money)
-        st.dataframe(df, use_container_width=True)
+        tmp = df.copy()
+        if "price" in tmp.columns:
+            tmp["price"] = tmp["price"].map(_format_money)
+        st.table(tmp)
 
-# -----------------------------------------
-# Diensten (beheer)
-# -----------------------------------------
-with tab_services:
-    st.subheader("Diensten (beheer)")
 
-    cats_df = get_categories(company_id)
-    cat_options = ["Algemeen"] + (cats_df["name"].tolist() if not cats_df.empty else [])
+# =========================================
+# Admin views
+# =========================================
+def render_services_admin(cid: int):
+    st.markdown("## Diensten beheren")
+    cats = get_categories(cid)
+    services = get_services(cid)
 
-    c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
-    sv_name = c1.text_input("Naam", placeholder="Bijv. Pedicure Basic")
-    sv_price = c2.number_input("Prijs (€)", min_value=0.0, step=0.50, value=0.0)
-    sv_dur = c3.number_input("Duur (minuten)", min_value=5, step=5, value=30)
-    pick_cat = c4.selectbox(
-        "Categorie",
-        options=["Algemeen", "Nieuwe categorie…"] + (cats_df["name"].tolist() if not cats_df.empty else []),
-    )
+    with st.expander("Nieuwe dienst toevoegen", expanded=True):
+        col1, col2 = st.columns(2)
+        name = col1.text_input("Naam dienst")
+        price = col2.number_input("Prijs", min_value=0.0, step=1.0)
+        duration = col1.number_input("Duur (minuten)", min_value=0, step=5)
+        category = col2.selectbox(
+            "Categorie",
+            ["(geen)"] + list(cats["name"]) if not cats.empty else ["(geen)"],
+        )
+        description = st.text_area("Beschrijving (optioneel)")
+        publish = st.checkbox("Publiceren in publieke catalogus", value=True)
 
-    new_cat_name, new_cat_desc = None, ""
-    if pick_cat == "Nieuwe categorie…":
-        st.info("Nieuwe categorie", icon="🗂️")
-        new_cat_name = st.text_input("Categorie naam", placeholder="Bijv. Deelbehandelingen")
-        new_cat_desc = st.text_area("Categorie beschrijving (optioneel)", placeholder="Deze groep bevat…")
-
-    sv_desc = st.text_area(
-        "Beschrijving (opt.)",
-        placeholder="Bijv. Voetbad, nagels knippen en vijlen, voetmassage (5min)"
-    )
-
-    if st.button("➕ Toevoegen", type="primary"):
-        if not sv_name:
-            _error("Vul een dienstnaam in.")
-        else:
-            final_cat = pick_cat
-            if pick_cat == "Nieuwe categorie…" and new_cat_name:
-                upsert_category(company_id, new_cat_name, new_cat_desc)
-                final_cat = new_cat_name
-            add_service(company_id, sv_name, sv_price, sv_dur, final_cat, sv_desc)
-            _success("Dienst toegevoegd.")
-            st.rerun()
+        if st.button("Opslaan dienst", type="primary"):
+            if not name:
+                _error("Naam is verplicht.")
+            else:
+                cat_val = None if category == "(geen)" else category
+                add_service(
+                    cid,
+                    name,
+                    price,
+                    duration,
+                    cat_val,
+                    description,
+                    is_active=publish,
+                )
+                _success("Dienst toegevoegd.")
+                st.rerun()
 
     st.divider()
     st.markdown("#### Huidige diensten")
 
-    cur = get_services(company_id)
+    cur = services
     if cur.empty:
         _info("Nog geen diensten toegevoegd.")
     else:
-        # Probeer is_active te tonen indien kolom aanwezig
-        show_cols = [c for c in cur.columns if c in ["id","name","price","duration","category","is_active"]]
+        show_cols = [
+            c
+            for c in cur.columns
+            if c in ["id", "name", "price", "duration", "category", "is_active"]
+        ]
         pretty = cur[show_cols].copy()
         if "price" in pretty.columns:
             pretty["price"] = pretty["price"].map(_format_money)
         st.dataframe(pretty, use_container_width=True)
 
-        with st.expander("✏️ Bewerken of verwijderen", expanded=False):
-            ids = cur["id"].tolist()
-            edit_id = st.selectbox(
-                "Kies dienst",
-                options=ids,
-                format_func=lambda x: f"{x} – {cur[cur['id'] == x]['name'].iloc[0]}"
-            )
 
-            row = cur[cur["id"] == edit_id].iloc[0]
-            ec1, ec2, ec3, ec4 = st.columns([2, 1, 1, 1])
+def render_availability(cid: int):
+    st.markdown("## Beschikbaarheid")
+    st.caption("Stel je vaste openingstijden in.")
 
-            e_name = ec1.text_input("Naam", value=row["name"], key=f"name_{row['id']}")
-            e_price = ec2.number_input("Prijs (€)", value=float(row["price"]), key=f"price_{row['id']}")
-            e_dur = ec3.number_input(
-                "Duur (minuten)",
-                min_value=5, step=5, value=int(row["duration"]),
-                key=f"dur_{row['id']}"
-            )
-            e_cat = ec4.selectbox(
-                "Categorie",
-                options=cat_options,
-                index=(cat_options.index(row["category"]) if row["category"] in cat_options else 0)
-            )
-            e_desc = st.text_area("Beschrijving", value=row.get("description") or "", height=90)
+    days = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"]
+    col1, col2, col3 = st.columns(3)
+    day = col1.selectbox("Dag", days)
+    start = col2.time_input("Starttijd")
+    end = col3.time_input("Eindtijd")
 
-            # Zichtbaarheids-toggle
-            active_val = True
-            if "is_active" in row.index and pd.notna(row["is_active"]):
-                try:
-                    active_val = bool(int(row["is_active"]))
-                except Exception:
-                    active_val = True
-            e_active = st.checkbox("Zichtbaar voor klanten", value=active_val, key=f"act_{row['id']}")
+    if st.button("Toevoegen tijdvak", type="primary"):
+        add_availability(cid, day, start, end)
+        _success("Tijdvak toegevoegd.")
+        st.rerun()
 
-            bc1, bc2, bc3 = st.columns([1, 1, 1])
-            if bc1.button("Opslaan wijzigingen", type="primary", key=f"save_{row['id']}"):
-                update_service(edit_id, e_name, e_price, e_dur, e_cat, e_desc)
-                set_service_active(edit_id, e_active)
-                _success("Dienst bijgewerkt.")
-                st.rerun()
-            if bc2.button("❌ Verwijderen", key=f"del_{row['id']}"):
-                delete_service(edit_id)
-                _success("Dienst verwijderd.")
-                st.rerun()
-            if bc3.button("👀 Bekijk als klant", key=f"pub_{row['id']}"):
-                params["view"] = ["public"]
-                params["company"] = [str(company_id)]
-                st.experimental_set_query_params(**params)
-                st.rerun()
-
-# -----------------------------------------
-# Beschikbaarheid (beheer)
-# -----------------------------------------
-with tab_availability:
-    st.subheader("Beschikbaarheid")
-    days = ["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"]
-
-    ac1, ac2, ac3 = st.columns(3)
-    day = ac1.selectbox("Dag", options=days)
-    start = ac2.time_input("Start", value=datetime.strptime("09:00","%H:%M").time())
-    end = ac3.time_input("Einde", value=datetime.strptime("17:00","%H:%M").time())
-
-    if st.button("➕ Toevoegen tijdvenster"):
-        if end <= start:
-            _error("Einde moet na start liggen.")
-        else:
-            add_availability(company_id, day, start.strftime("%H:%M"), end.strftime("%H:%M"))
-            _success("Tijdvenster toegevoegd.")
-            st.rerun()
-
-    st.markdown("#### Huidige beschikbaarheid")
-    avail = get_availability(company_id)
-    if avail.empty:
+    st.divider()
+    cur = get_availability(cid)
+    if cur.empty:
         _info("Nog geen beschikbaarheid ingesteld.")
     else:
-        st.dataframe(avail, use_container_width=True)
+        st.dataframe(cur, use_container_width=True)
 
-# -----------------------------------------
-# Herinneringen (beheer)
-# -----------------------------------------
-with tab_reminders:
-    st.subheader("Herinneringen")
-    cfg = get_reminder_settings(company_id)
 
-    rc1, rc2, rc3 = st.columns(3)
-    enabled = rc1.checkbox("Herinneringen aan", value=bool(cfg["enabled"]))
-    sms_enabled = rc2.checkbox("SMS", value=bool(cfg["sms_enabled"]))
-    wa_enabled = rc3.checkbox("WhatsApp", value=bool(cfg["whatsapp_enabled"]))
+def render_bookings(cid: int):
+    st.markdown("## Boekingen")
+    overview = get_bookings_overview(cid)
+    st.dataframe(overview, use_container_width=True)
 
-    rc4, rc5, rc6 = st.columns(3)
-    days_before = rc4.number_input("Dagen vooraf", min_value=0, max_value=14, value=int(cfg["days_before"]))
-    send_time = rc5.text_input("Verzendtijd (HH:MM)", value=cfg["send_time"] or "09:00")
-    tz = rc6.text_input("Tijdzone", value=cfg["tz"] or "Europe/Brussels")
+    st.markdown("#### Alle boekingen (detail)")
+    bookings = get_bookings(cid)
+    st.dataframe(bookings, use_container_width=True)
 
-    rc7, rc8 = st.columns(2)
-    same_day_enabled = rc7.checkbox("Zelfde dag herinnering", value=bool(cfg["same_day_enabled"]))
-    same_day_minutes_before = rc8.number_input("Minuten vooraf (zelfde dag)", min_value=0, max_value=600,
-                                               value=int(cfg["same_day_minutes_before"]))
 
-    st.markdown("**Templates (optioneel)**")
-    t1 = st.text_area("SMS (dag ervoor)", value=cfg.get("template_day_before_sms") or "")
-    t2 = st.text_area("SMS (zelfde dag)", value=cfg.get("template_same_day_sms") or "")
-    t3 = st.text_area("WhatsApp (dag ervoor)", value=cfg.get("template_day_before_wa") or "")
-    t4 = st.text_area("WhatsApp (zelfde dag)", value=cfg.get("template_same_day_wa") or "")
+def render_account(cid: int):
+    st.markdown("## Account & abonnement")
 
-    if st.button("Opslaan", type="primary"):
-        upsert_reminder_settings(
-            company_id=company_id,
-            enabled=int(enabled),
-            sms_enabled=int(sms_enabled),
-            whatsapp_enabled=int(wa_enabled),
-            days_before=int(days_before),
-            send_time=send_time,
-            same_day_enabled=int(same_day_enabled),
-            same_day_minutes_before=int(same_day_minutes_before),
-            tz=tz,
-            template_day_before_sms=t1 or None,
-            template_same_day_sms=t2 or None,
-            template_day_before_wa=t3 or None,
-            template_same_day_wa=t4 or None,
-        )
-        _success("Herinneringen opgeslagen.")
-
-# -----------------------------------------
-# Klant-preview (boeken)
-# -----------------------------------------
-with tab_client:
-    st.subheader("Klant-preview (boeken)")
-    # Lijst van publieke services (zichtbaar=1)
-    pub = get_public_services(company_id)
-    if pub.empty:
-        _info("Er zijn nog geen gepubliceerde diensten. Zet in Diensten ‘Zichtbaar voor klanten’ aan.")
-    else:
-        selected_items: List[Dict[str, Any]] = []
-        total_price = 0.0
-        total_minutes = 0
-
-        st.markdown("#### Kies je dienst(en)")
-        for cat, grp in pub.groupby(pub["category"].fillna("Algemeen")):
-            with st.expander(cat, expanded=True):
-                for _, r in grp.iterrows():
-                    chk = st.checkbox(
-                        f"{r['name']} — {_format_money(r['price'])} • {int(r['duration'])} min",
-                        key=f"svc_{r['id']}"
-                    )
-                    if chk:
-                        selected_items.append({
-                            "service_id": int(r["id"]),
-                            "name": r["name"],
-                            "price": float(r["price"]),
-                            "duration": int(r["duration"]),
-                        })
-                        total_price += float(r["price"])
-                        total_minutes += int(r["duration"])
-
-        if not selected_items:
-            _info("Selecteer één of meerdere diensten om tijdsloten te zien.")
-        else:
-            st.markdown(f"**Geselecteerd:** {_format_money(total_price)} • {total_minutes} min")
-
-            d = st.date_input("Datum", value=_date.today())
-            sel_date = _date_to_str(d)
-
-            slots = get_available_slots_for_duration(company_id, sel_date, total_minutes)
-            if not slots:
-                _info("Geen beschikbare tijdsloten voor deze datum.")
-            else:
-                slot = st.selectbox("Beschikbare tijdsloten", options=slots)
-                cc1, cc2 = st.columns([2, 1])
-                cust_name = cc1.text_input("Naam")
-                cust_phone = cc2.text_input("Telefoon")
-
-                if st.button("Bevestig afspraak", type="primary"):
-                    if not cust_name or not cust_phone:
-                        _error("Vul naam en telefoon in.")
-                    else:
-                        try:
-                            # Plaats boeking (met snapshot van items)
-                            booking_id = add_booking_with_items(
-                                company_id, cust_name, cust_phone, sel_date, slot, selected_items
-                            )
-                            _success(f"Afspraak bevestigd (#{booking_id}) op {sel_date} om {slot}.")
-                            st.balloons()
-                        except Exception as e:
-                            _error(f"Kon afspraak niet plaatsen: {e}")
-
-# -----------------------------------------
-# Afspraken-overzicht
-# -----------------------------------------
-with tab_appointments:
-    st.subheader("Afspraken-overzicht")
-    bok = get_bookings_overview(company_id)
-    if bok.empty:
-        _info("Nog geen afspraken.")
-    else:
-        df = bok.copy()
-        df["total_price"] = df["total_price"].map(_format_money)
-        st.dataframe(df, use_container_width=True)
-
-# -----------------------------------------
-# Account
-# -----------------------------------------
-with tab_account:
-    st.subheader("Account")
-    paid = is_company_paid(company_id)
-    st.write("Status:", "✅ Actief" if paid else "⏸️ Nog niet geactiveerd")
+    paid = is_company_paid(cid)
+    st.markdown(
+        f"Status abonnement: {'✅ Actief' if paid else '⏸️ Nog niet geactiveerd'}"
+    )
     if not paid and st.button("Activeer"):
-        activate_company(company_id)
+        activate_company(cid)
         _success("Account geactiveerd.")
         st.rerun()
 
     st.markdown("#### Profiel bijwerken")
-    cur = get_company(company_id)
-    # cur = (id, name, email, password, paid, created_at)
+    cur = get_company(cid)
+    # cur = (id, name, email, password, paid, created_at, slug, logo_path, ...)
     pc1, pc2 = st.columns(2)
     new_name = pc1.text_input("Bedrijfsnaam", value=cur[1] if cur else "")
     new_email = pc2.text_input("E-mail", value=cur[2] if cur else "")
     new_pw = st.text_input("Nieuw wachtwoord (optioneel)", type="password")
 
     if st.button("Opslaan profiel", type="primary"):
-        ok = update_company_profile(company_id, new_name, new_email, new_pw or None)
+        ok = update_company_profile(cid, new_name, new_email, new_pw or None)
         if ok:
             _success("Profiel opgeslagen.")
             st.rerun()
         else:
             _error("Kon profiel niet opslaan.")
 
+    st.markdown("#### Bedrijfslogo")
+    uploaded_logo = st.file_uploader(
+        "Upload je bedrijfslogo (PNG/JPG)",
+        type=["png", "jpg", "jpeg"],
+        key="logo_uploader",
+    )
+    if uploaded_logo is not None:
+        os.makedirs("data/logos", exist_ok=True)
+        ext = os.path.splitext(uploaded_logo.name)[1].lower() or ".png"
+        logo_path = f"data/logos/company_{cid}{ext}"
+        with open(logo_path, "wb") as f:
+            f.write(uploaded_logo.getbuffer())
+        if set_company_logo(cid, logo_path):
+            _success("Logo opgeslagen.")
+            st.rerun()
+        else:
+            _error("Kon logo niet opslaan.")
+    elif get_company_logo(cid):
+        st.image(
+            get_company_logo(cid),
+            caption="Huidig logo",
+            width=160,
+        )
+
     st.divider()
     if st.button("Uitloggen"):
         st.session_state.clear()
         st.experimental_set_query_params()
         st.rerun()
+
+
+# =========================================
+# Routering tussen admin/public
+# =========================================
+if view_mode == "public":
+    render_public_catalog(company_id)
+else:
+    tabs = st.tabs(["Diensten", "Beschikbaarheid", "Boekingen", "Account"])
+    with tabs[0]:
+        render_services_admin(company_id)
+    with tabs[1]:
+        render_availability(company_id)
+    with tabs[2]:
+        render_bookings(company_id)
+    with tabs[3]:
+        render_account(company_id)
