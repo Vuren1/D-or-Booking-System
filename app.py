@@ -17,8 +17,8 @@ from database import (
     # init & companies
     init_db, get_company_name_by_id, add_company, get_company_by_email, get_company,
     activate_company, is_company_paid, update_company_profile,
-    # categories & services
-    get_categories, add_category, upsert_category, get_services, add_service, update_service, delete_service,
+    # categories & services  (⚠️ upsert_category NIET hier importeren)
+    get_categories, add_category, get_services, add_service, update_service, delete_service,
     set_service_active, get_public_services,
     # availability
     add_availability, get_availability,
@@ -28,6 +28,37 @@ from database import (
     # reminders
     get_reminder_settings, upsert_reminder_settings,
 )
+
+# --- Veilige import voor upsert_category (met fallback) ---
+try:
+    from database import upsert_category as _upsert_category  # nieuwe/gewilde versie
+except Exception:
+    _upsert_category = None
+
+def upsert_category(company_id: int, name: str, description: str = ""):
+    """
+    Gebruik database.upsert_category als die bestaat; anders val terug op:
+    - bestaat categorie al? -> update beschrijving
+    - anders -> voeg categorie toe
+    """
+    if _upsert_category is not None:
+        return _upsert_category(company_id, name, description)
+
+    # Fallback zonder harde afhankelijkheid:
+    from database import (
+        get_categories as _get_categories,
+        add_category as _add_category,
+        update_category as _update_category,
+    )
+    df = _get_categories(company_id)
+    if not df.empty and name in df["name"].astype(str).tolist():
+        row = df[df["name"] == name].iloc[0]
+        return _update_category(int(row["id"]), name, description)
+    else:
+        return _add_category(company_id, name, description)
+
+# Init DB vroeg zodat migraties meteen lopen
+init_db()
 
 # =========================================
 # Init
