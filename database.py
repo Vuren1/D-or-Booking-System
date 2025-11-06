@@ -6,9 +6,6 @@ from typing import Iterable, List, Optional, Tuple
 
 import pandas as pd
 
-# =============================
-# DB setup
-# =============================
 os.makedirs("data", exist_ok=True)
 DB_NAME = "data/bookings.db"
 
@@ -33,11 +30,10 @@ def _slugify(name: str) -> str:
 
 
 def init_db():
-    """Maak/migreer alle tabellen. Veilig om meerdere keren uit te voeren."""
     conn = get_connection()
     c = conn.cursor()
 
-    # Bedrijven
+    # Companies
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS companies (
@@ -52,26 +48,25 @@ def init_db():
         )
         """
     )
-    # Migraties voor oude DB's
-    for col, ddl in [
-        ("slug", "ALTER TABLE companies ADD COLUMN slug TEXT UNIQUE"),
-        ("logo_path", "ALTER TABLE companies ADD COLUMN logo_path TEXT"),
+    for ddl in [
+        "ALTER TABLE companies ADD COLUMN slug TEXT UNIQUE",
+        "ALTER TABLE companies ADD COLUMN logo_path TEXT",
     ]:
         try:
             c.execute(ddl)
         except Exception:
             pass
 
-    # Vul slugs voor bestaande bedrijven
+    # Generate slugs if missing
     try:
         c.execute("SELECT id, name FROM companies WHERE slug IS NULL OR slug = ''")
         for row in c.fetchall():
-            cid, nm = int(row[0]), str(row[1])
+            cid, nm = int(row["id"]), str(row["name"])
             base = _slugify(nm)
             slug = base
             i = 1
             while True:
-                c.execute("SELECT 1 FROM companies WHERE slug = ?", (slug,))
+                c.execute("SELECT 1 FROM companies WHERE slug=?", (slug,))
                 if not c.fetchone():
                     break
                 i += 1
@@ -80,7 +75,7 @@ def init_db():
     except Exception:
         pass
 
-    # Categorieën
+    # Categories
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS categories (
@@ -94,7 +89,7 @@ def init_db():
         """
     )
 
-    # Diensten
+    # Services
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS services (
@@ -103,7 +98,7 @@ def init_db():
             name        TEXT NOT NULL,
             price       REAL NOT NULL DEFAULT 0,
             duration    INTEGER NOT NULL DEFAULT 0,
-            category    TEXT,              -- vrije tekst of naam uit categories
+            category    TEXT,
             description TEXT,
             is_active   INTEGER NOT NULL DEFAULT 1,
             FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
@@ -111,30 +106,30 @@ def init_db():
         """
     )
 
-    # Beschikbaarheid
+    # Availability
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS availability (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             company_id  INTEGER NOT NULL,
-            day         TEXT NOT NULL,     -- Maandag ... Zondag
-            start_time  TEXT NOT NULL,     -- HH:MM
-            end_time    TEXT NOT NULL,     -- HH:MM
+            day         TEXT NOT NULL,
+            start_time  TEXT NOT NULL,
+            end_time    TEXT NOT NULL,
             FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
         )
         """
     )
 
-    # Boekingen (header)
+    # Bookings
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS bookings (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             company_id  INTEGER NOT NULL,
             customer    TEXT,
-            date        TEXT NOT NULL,     -- YYYY-MM-DD
-            start_time  TEXT NOT NULL,     -- HH:MM
-            end_time    TEXT NOT NULL,     -- HH:MM
+            date        TEXT NOT NULL,
+            start_time  TEXT NOT NULL,
+            end_time    TEXT NOT NULL,
             total_price REAL NOT NULL DEFAULT 0,
             created_at  TEXT,
             FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
@@ -142,7 +137,7 @@ def init_db():
         """
     )
 
-    # Boekingsregels
+    # Booking items
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS booking_items (
@@ -157,7 +152,7 @@ def init_db():
         """
     )
 
-    # Herinneringen
+    # Reminder settings (uitgebreid)
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS reminder_settings (
@@ -165,19 +160,30 @@ def init_db():
             company_id   INTEGER NOT NULL,
             offset_hours INTEGER NOT NULL DEFAULT 24,
             active       INTEGER NOT NULL DEFAULT 0,
+            sms_active        INTEGER NOT NULL DEFAULT 0,
+            whatsapp_active   INTEGER NOT NULL DEFAULT 0,
+            email_active      INTEGER NOT NULL DEFAULT 0,
             UNIQUE(company_id),
             FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
         )
         """
     )
+    # migratie extra kolommen
+    for col in ["sms_active", "whatsapp_active", "email_active"]:
+        try:
+            c.execute(
+                f"ALTER TABLE reminder_settings ADD COLUMN {col} INTEGER NOT NULL DEFAULT 0"
+            )
+        except Exception:
+            pass
 
     conn.commit()
     conn.close()
 
 
-# =============================
+# -----------------------------
 # Companies
-# =============================
+# -----------------------------
 def add_company(name: str, email: str, password: str) -> int:
     conn = get_connection()
     try:
@@ -312,7 +318,6 @@ def update_company_profile(
                 "UPDATE companies SET name=?, email=? WHERE id=?",
                 (name, email, company_id),
             )
-        # Slug eventueel bijwerken bij naamswijziging? Nee: stabiel houden.
         conn.commit()
         return True
     except Exception:
@@ -321,9 +326,9 @@ def update_company_profile(
         conn.close()
 
 
-# =============================
+# -----------------------------
 # Categories
-# =============================
+# -----------------------------
 def get_categories(company_id: int) -> pd.DataFrame:
     conn = get_connection()
     df = pd.read_sql_query(
@@ -344,7 +349,6 @@ def add_category(company_id: int, name: str, description: str = "") -> int:
             (company_id, name, description),
         )
         conn.commit()
-        # haal id op
         c.execute(
             "SELECT id FROM categories WHERE company_id=? AND name=?",
             (company_id, name),
@@ -356,13 +360,12 @@ def add_category(company_id: int, name: str, description: str = "") -> int:
 
 
 def upsert_category(company_id: int, name: str, description: str = "") -> int:
-    cid = add_category(company_id, name, description)
-    return cid
+    return add_category(company_id, name, description)
 
 
-# =============================
+# -----------------------------
 # Services
-# =============================
+# -----------------------------
 def get_services(company_id: int) -> pd.DataFrame:
     conn = get_connection()
     df = pd.read_sql_query(
@@ -464,7 +467,6 @@ def set_service_active(service_id: int, active: bool) -> bool:
 
 
 def get_public_services(company_id: int) -> pd.DataFrame:
-    """Alleen gepubliceerde (is_active=1) diensten."""
     conn = get_connection()
     df = pd.read_sql_query(
         """
@@ -480,10 +482,18 @@ def get_public_services(company_id: int) -> pd.DataFrame:
     return df
 
 
-# =============================
+# -----------------------------
 # Availability
-# =============================
-_DUTCH_DAYS = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"]
+# -----------------------------
+_DUTCH_DAYS = [
+    "Maandag",
+    "Dinsdag",
+    "Woensdag",
+    "Donderdag",
+    "Vrijdag",
+    "Zaterdag",
+    "Zondag",
+]
 
 
 def add_availability(company_id: int, day: str, start_time: dtime, end_time: dtime) -> int:
@@ -524,23 +534,13 @@ def get_availability(company_id: int) -> pd.DataFrame:
     return df
 
 
-# =============================
-# Slotberekening (eenvoudig)
-# =============================
-def _time_to_minutes(t: dtime) -> int:
-    return t.hour * 60 + t.minute
-
-
-def _minutes_to_time(m: int) -> dtime:
-    return (datetime(2000, 1, 1) + timedelta(minutes=m)).time()
-
-
+# -----------------------------
+# Slots
+# -----------------------------
 def get_available_slots_for_duration(
     company_id: int, target_date: ddate, duration_minutes: int, step_minutes: int = 15
 ) -> List[str]:
-    """Return lijst HH:MM starttijden die passen binnen openingstijden minus bestaande boekingen."""
-    # 1) Openingstijden voor die dag
-    weekday_idx = (target_date.weekday())  # 0=ma
+    weekday_idx = target_date.weekday()
     day_name = _DUTCH_DAYS[weekday_idx]
 
     avail = get_availability(company_id)
@@ -548,20 +548,19 @@ def get_available_slots_for_duration(
     if avail.empty:
         return []
 
-    # 2) Bestaande boekingen op die datum
     conn = get_connection()
     c = conn.cursor()
     c.execute(
         "SELECT start_time, end_time FROM bookings WHERE company_id=? AND date=?",
         (company_id, target_date.strftime("%Y-%m-%d")),
     )
-    busy = [(row[0], row[1]) for row in c.fetchall()]
+    busy = [(r["start_time"], r["end_time"]) for r in c.fetchall()]
     conn.close()
 
     busy_ranges: List[Tuple[int, int]] = []
     for s, e in busy:
-        st_m = int(s.split(":")[0]) * 60 + int(s.split(":")[1])
-        en_m = int(e.split(":")[0]) * 60 + int(e.split(":")[1])
+        st_m = int(s[:2]) * 60 + int(s[3:5])
+        en_m = int(e[:2]) * 60 + int(e[3:5])
         busy_ranges.append((st_m, en_m))
 
     def is_free(start_m: int, end_m: int) -> bool:
@@ -572,10 +571,8 @@ def get_available_slots_for_duration(
 
     slots: List[str] = []
     for _, row in avail.iterrows():
-        start = row["start_time"]
-        end = row["end_time"]
-        start_m = int(start.split(":")[0]) * 60 + int(start.split(":")[1])
-        end_m = int(end.split(":")[0]) * 60 + int(end.split(":")[1])
+        start_m = int(row["start_time"][:2]) * 60 + int(row["start_time"][3:5])
+        end_m = int(row["end_time"][:2]) * 60 + int(row["end_time"][3:5])
 
         cur = start_m
         while cur + duration_minutes <= end_m:
@@ -588,24 +585,19 @@ def get_available_slots_for_duration(
     return slots
 
 
-# =============================
+# -----------------------------
 # Bookings
-# =============================
+# -----------------------------
 def add_booking_with_items(
     company_id: int,
     customer: str,
-    date_str: str,       # "YYYY-MM-DD"
-    start_time: str,     # "HH:MM"
-    items: Iterable[dict],  # [{'service_id':..., 'name':..., 'price':..., 'duration':...}, ...]
+    date_str: str,
+    start_time: str,
+    items: Iterable[dict],
 ) -> int:
-    """Maak een boeking + regels; berekent end_time & total_price automatisch."""
-    total_minutes = 0
-    total_price = 0.0
-    items_list = list(items)
-
-    for it in items_list:
-        total_minutes += int(it.get("duration", 0))
-        total_price += float(it.get("price", 0))
+    items = list(items)
+    total_minutes = sum(int(i.get("duration", 0)) for i in items)
+    total_price = sum(float(i.get("price", 0)) for i in items)
 
     st_h, st_m = map(int, start_time.split(":"))
     start_dt = datetime.strptime(f"{date_str} {st_h:02d}:{st_m:02d}", "%Y-%m-%d %H:%M")
@@ -620,17 +612,31 @@ def add_booking_with_items(
             INSERT INTO bookings (company_id, customer, date, start_time, end_time, total_price, created_at)
             VALUES (?,?,?,?,?,?,?)
             """,
-            (company_id, customer, date_str, start_time, end_time, total_price, datetime.utcnow().isoformat()),
+            (
+                company_id,
+                customer,
+                date_str,
+                start_time,
+                end_time,
+                total_price,
+                datetime.utcnow().isoformat(),
+            ),
         )
         bid = c.lastrowid
 
-        for it in items_list:
+        for it in items:
             c.execute(
                 """
                 INSERT INTO booking_items (booking_id, service_id, name, price, duration)
                 VALUES (?,?,?,?,?)
                 """,
-                (bid, it.get("service_id"), it.get("name"), it.get("price"), it.get("duration")),
+                (
+                    bid,
+                    it.get("service_id"),
+                    it.get("name"),
+                    it.get("price"),
+                    it.get("duration"),
+                ),
             )
 
         conn.commit()
@@ -659,10 +665,9 @@ def get_bookings_overview(company_id: int) -> pd.DataFrame:
     conn = get_connection()
     df = pd.read_sql_query(
         """
-        SELECT
-            date,
-            COUNT(*) AS total_bookings,
-            SUM(total_price) AS revenue
+        SELECT date,
+               COUNT(*)           AS total_bookings,
+               SUM(total_price)   AS revenue
         FROM bookings
         WHERE company_id=?
         GROUP BY date
@@ -675,14 +680,15 @@ def get_bookings_overview(company_id: int) -> pd.DataFrame:
     return df
 
 
-# =============================
+# -----------------------------
 # Reminders
-# =============================
+# -----------------------------
 def get_reminder_settings(company_id: int) -> pd.DataFrame:
     conn = get_connection()
     df = pd.read_sql_query(
         """
-        SELECT offset_hours, active
+        SELECT offset_hours, active,
+               sms_active, whatsapp_active, email_active
         FROM reminder_settings
         WHERE company_id=?
         """,
@@ -690,24 +696,61 @@ def get_reminder_settings(company_id: int) -> pd.DataFrame:
         params=(company_id,),
     )
     conn.close()
+
     if df.empty:
-        return pd.DataFrame([{"offset_hours": 24, "active": 0}])
+        df = pd.DataFrame(
+            [
+                {
+                    "offset_hours": 24,
+                    "active": 0,
+                    "sms_active": 0,
+                    "whatsapp_active": 0,
+                    "email_active": 0,
+                }
+            ]
+        )
+
+    # Zorg dat kolommen altijd bestaan
+    for col in ["sms_active", "whatsapp_active", "email_active"]:
+        if col not in df.columns:
+            df[col] = 0
+
     return df
 
 
-def upsert_reminder_settings(company_id: int, offset_hours: int, active: bool) -> bool:
+def upsert_reminder_settings(
+    company_id: int,
+    offset_hours: int,
+    active: bool,
+    sms_active: bool,
+    whatsapp_active: bool,
+    email_active: bool,
+) -> bool:
     conn = get_connection()
     try:
         c = conn.cursor()
         c.execute(
             """
-            INSERT INTO reminder_settings (company_id, offset_hours, active)
-            VALUES (?,?,?)
-            ON CONFLICT(company_id) DO UPDATE
-            SET offset_hours=excluded.offset_hours,
-                active=excluded.active
+            INSERT INTO reminder_settings (
+                company_id, offset_hours, active,
+                sms_active, whatsapp_active, email_active
+            )
+            VALUES (?,?,?,?,?,?)
+            ON CONFLICT(company_id) DO UPDATE SET
+                offset_hours   = excluded.offset_hours,
+                active         = excluded.active,
+                sms_active     = excluded.sms_active,
+                whatsapp_active= excluded.whatsapp_active,
+                email_active   = excluded.email_active
             """,
-            (company_id, offset_hours, 1 if active else 0),
+            (
+                company_id,
+                int(offset_hours),
+                1 if active else 0,
+                1 if sms_active else 0,
+                1 if whatsapp_active else 0,
+                1 if email_active else 0,
+            ),
         )
         conn.commit()
         return True
