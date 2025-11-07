@@ -341,12 +341,16 @@ def render_reminders(cid: int):
 
     settings = get_reminder_settings(cid).iloc[0]
 
+    # Globale schakelaar
     global_active = st.checkbox(
         "Herinneringen inschakelen",
         value=bool(settings["active"]),
+        key="rem_global_active",
     )
 
-    # -------- Herinnering 1: dagen ervoor --------
+    # =========================
+    # Herinnering 1 - dagen vóór
+    # =========================
     st.markdown("---")
     st.markdown("### Herinnering 1 – dagen vóór de afspraak")
 
@@ -356,16 +360,38 @@ def render_reminders(cid: int):
         min_value=0,
         max_value=365,
         value=int(settings["rem1_days_before"]),
+        key="rem1_days_before_input",
     )
+    # tijd-string -> time
+    def _parse_time_str(value: str):
+        try:
+            h, m = value.split(":")
+            return dtime(int(h), int(m))
+        except Exception:
+            return dtime(9, 0)
+
     rem1_time = col2.time_input(
         "Verzendtijd",
         value=_parse_time_str(str(settings["rem1_time"])),
+        key="rem1_time_input",
     )
 
     ch1_col1, ch1_col2, ch1_col3 = st.columns(3)
-    rem1_sms = ch1_col1.checkbox("SMS", value=bool(settings["rem1_sms"]))
-    rem1_whatsapp = ch1_col2.checkbox("WhatsApp", value=bool(settings["rem1_whatsapp"]))
-    rem1_email = ch1_col3.checkbox("E-mail", value=bool(settings["rem1_email"]))
+    rem1_sms = ch1_col1.checkbox(
+        "SMS",
+        value=bool(settings["rem1_sms"]),
+        key="rem1_sms_checkbox",
+    )
+    rem1_whatsapp = ch1_col2.checkbox(
+        "WhatsApp",
+        value=bool(settings["rem1_whatsapp"]),
+        key="rem1_whatsapp_checkbox",
+    )
+    rem1_email = ch1_col3.checkbox(
+        "E-mail",
+        value=bool(settings["rem1_email"]),
+        key="rem1_email_checkbox",
+    )
 
     st.markdown("**Berichtteksten Herinnering 1**")
     m1_sms = st.text_area(
@@ -373,25 +399,30 @@ def render_reminders(cid: int):
         value=str(settings["rem1_message_sms"] or ""),
         placeholder="Bijvoorbeeld: Beste {klantnaam}, dit is een herinnering voor uw afspraak op {datum} om {tijd}.",
         height=70,
+        key="rem1_message_sms_input",
     )
     m1_wa = st.text_area(
         "WhatsApp tekst",
         value=str(settings["rem1_message_whatsapp"] or ""),
         placeholder="Bijvoorbeeld: Beste {klantnaam}, we zien u graag op {datum} om {tijd}.",
         height=70,
+        key="rem1_message_whatsapp_input",
     )
     m1_email = st.text_area(
         "E-mail tekst",
         value=str(settings["rem1_message_email"] or ""),
         placeholder=(
-            "Bijvoorbeeld: Beste {klantnaam},\\n\\n"
-            "Dit is een herinnering voor uw afspraak op {datum} om {tijd}.\\n\\n"
-            "Met vriendelijke groeten,\\n{bedrijfsnaam}"
+            "Bijvoorbeeld: Beste {klantnaam},\n\n"
+            "Dit is een herinnering voor uw afspraak op {datum} om {tijd}.\n\n"
+            "Met vriendelijke groeten,\n{bedrijfsnaam}"
         ),
         height=110,
+        key="rem1_message_email_input",
     )
 
-    # -------- Herinnering 2: minuten ervoor --------
+    # =========================
+    # Herinnering 2 - minuten vóór
+    # =========================
     st.markdown("---")
     st.markdown("### Herinnering 2 – minuten vóór de afspraak (zelfde dag)")
 
@@ -401,12 +432,25 @@ def render_reminders(cid: int):
         min_value=0,
         max_value=1440,
         value=int(settings["rem2_minutes_before"]),
+        key="rem2_minutes_before_input",
     )
 
     ch2_col1, ch2_col2, ch2_col3 = st.columns(3)
-    rem2_sms = ch2_col1.checkbox("SMS", value=bool(settings["rem2_sms"]))
-    rem2_whatsapp = ch2_col2.checkbox("WhatsApp", value=bool(settings["rem2_whatsapp"]))
-    rem2_email = ch2_col3.checkbox("E-mail", value=bool(settings["rem2_email"]))
+    rem2_sms = ch2_col1.checkbox(
+        "SMS",
+        value=bool(settings["rem2_sms"]),
+        key="rem2_sms_checkbox",
+    )
+    rem2_whatsapp = ch2_col2.checkbox(
+        "WhatsApp",
+        value=bool(settings["rem2_whatsapp"]),
+        key="rem2_whatsapp_checkbox",
+    )
+    rem2_email = ch2_col3.checkbox(
+        "E-mail",
+        value=bool(settings["rem2_email"]),
+        key="rem2_email_checkbox",
+    )
 
     st.markdown("**Berichtteksten Herinnering 2**")
     m2_sms = st.text_area(
@@ -414,26 +458,31 @@ def render_reminders(cid: int):
         value=str(settings["rem2_message_sms"] or ""),
         placeholder="Bijvoorbeeld: Beste {klantnaam}, uw afspraak start om {tijd}. Tot zo!",
         height=70,
+        key="rem2_message_sms_input",
     )
     m2_wa = st.text_area(
         "WhatsApp tekst (zelfde dag)",
         value=str(settings["rem2_message_whatsapp"] or ""),
         placeholder="Bijvoorbeeld: Hi {klantnaam}, een korte reminder: uw afspraak begint om {tijd}.",
         height=70,
+        key="rem2_message_whatsapp_input",
     )
     m2_email = st.text_area(
         "E-mail tekst (zelfde dag)",
         value=str(settings["rem2_message_email"] or ""),
         placeholder=(
-            "Bijvoorbeeld: Beste {klantnaam},\\n\\n"
-            "Dit is een korte herinnering dat uw afspraak binnenkort start om {tijd}.\\n\\n"
-            "Met vriendelijke groeten,\\n{bedrijfsnaam}"
+            "Bijvoorbeeld: Beste {klantnaam},\n\n"
+            "Dit is een korte herinnering dat uw afspraak binnenkort start om {tijd}.\n\n"
+            "Met vriendelijke groeten,\n{bedrijfsnaam}"
         ),
         height=110,
+        key="rem2_message_email_input",
     )
 
-    # -------- Opslaan --------
-    if st.button("Instellingen opslaan", type="primary"):
+    # =========================
+    # Opslaan
+    # =========================
+    if st.button("Instellingen opslaan", type="primary", key="reminders_save_btn"):
         ok = upsert_reminder_settings(
             cid,
             global_active,
@@ -459,11 +508,11 @@ def render_reminders(cid: int):
             _error("Kon instellingen niet opslaan.")
 
     st.info(
-        "Deze instellingen bepalen wanneer en via welke kanalen herinneringen worden verstuurd. "
-        "De echte SMS/WhatsApp/E-mail integratie moet nog gekoppeld worden; alle keuzes worden hier al veilig opgeslagen."
+        "Alle tijden, kanalen en teksten worden hier per bedrijf opgeslagen. "
+        "De daadwerkelijke SMS/WhatsApp/E-mail verzending hangt af van de gekoppelde provider en bundels."
     )
 
-
+    
 def render_account(cid: int):
     st.markdown("## Account & abonnement")
 
