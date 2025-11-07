@@ -219,16 +219,15 @@ st.caption("Powered by D’or Booking System")
 # =============================
 # Header branding
 # =============================
+st.caption("Powered by D’or Booking System")
+
 if company_logo:
-    st.markdown(
-        f"""
-        <div style="text-align:center; margin-top:0.5rem; margin-bottom:1rem;">
-            <img src="{company_logo}" alt="{company_name}" style="max-height:80px;">
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    # Logo mooi centreren
+    left, center, right = st.columns([1, 2, 1])
+    with center:
+        st.image(company_logo, use_column_width=False)
 else:
+    # Fallback als er nog geen logo is
     st.markdown(
         """
         <div style="text-align:center; margin-top:0.5rem; margin-bottom:1rem;">
@@ -236,14 +235,6 @@ else:
         </div>
         """,
         unsafe_allow_html=True,
-    )
-
-st.markdown(f"### Beheeromgeving voor **{company_name}**")
-
-if company_slug:
-    st.caption(
-        "Jouw publieke boekingslink: "
-        f"`https://{company_slug}.{BASE_DOMAIN}`"
     )
 
 
