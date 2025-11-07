@@ -238,10 +238,8 @@ st.markdown(f"### Beheeromgeving voor **{company_name}**")
 
 if company_slug:
     st.caption(
-        "Jouw publieke boekingslink (voorbeeld): "
-        f"`https://{company_slug}.{BASE_DOMAIN}`  "
-        "(of gebruik voorlopig: "
-        f"`?company={company_slug}&view=public` )"
+        "Jouw publieke boekingslink: "
+        f"`https://{company_slug}.{BASE_DOMAIN}`"
     )
 
 
