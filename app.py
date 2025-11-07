@@ -655,6 +655,45 @@ def render_bundles_and_usage(cid: int):
         _success("E-mail limiet verhoogd met 1000.")
         st.rerun()
 
+        # ---------------- Extra e-mail limiet ----------------
+    st.markdown("### Extra e-mail limiet (optioneel)")
+    if st.button("Voeg 1000 extra e-mails toe", key="buy_email_extra"):
+        add_email_limit(cid, 1000)
+        _success("E-mail limiet verhoogd met 1000.")
+        st.rerun()
+
+    # ---------------- Uitleg kanalen (blauwe info) ----------------
+    st.info(
+        """
+        **Welke herinneringskanalen kies je het beste?**
+
+        **SMS**
+        - ✅ Komt bijna altijd aan, ook zonder internet.
+        - ✅ Werkt op elke GSM.
+        - ⚠️ Duurder per bericht.
+        - ⚠️ Minder geschikt voor langere teksten / geen logo.  
+        **Ideaal voor:** de laatste, belangrijke reminder op de dag zelf.
+
+        **WhatsApp**
+        - ✅ Goedkoper dan SMS.
+        - ✅ Duidelijke berichten met logo, emoji en linkjes.
+        - ✅ Klanten kunnen gemakkelijk antwoorden of bevestigen.
+        - ⚠️ Werkt alleen met internet en WhatsApp.
+        - ⚠️ Bij slechte verbinding kan het later binnenkomen.  
+        **Ideaal voor:** herinnering 1 of enkele dagen vóór de afspraak.
+
+        **E-mail**
+        - ✅ Praktisch gratis.
+        - ✅ Perfect voor bevestigingen en uitgebreide info.
+        - ⚠️ Niet altijd direct gelezen, kan in spam belanden.  
+        **Ideaal voor:** boekingsbevestiging + extra informatie.
+
+        **Aanbevolen combinatie**
+        - 1e herinnering (dagen ervoor): **WhatsApp + e-mail** (kostefficiënt & duidelijk).
+        - 2e herinnering (dag zelf): optioneel **SMS** voor maximale zekerheid.
+        """
+    )
+
     # ---------------- Tarieven tekst (info) ----------------
     st.markdown("---")
     st.markdown("### Tarieven (voorbeeld, aanpasbaar)")
@@ -680,36 +719,6 @@ def render_bundles_and_usage(cid: int):
         """
     )
 
-        st.info(
-        """
-        **Welke herinneringskanalen kies je het beste?**
-
-        **SMS**
-        - ✅ Komt bijna altijd aan, ook zonder internet.
-        - ✅ Werkt op elke GSM.
-        - ⚠️ Duurder per bericht.
-        - ⚠️ Minder geschikt voor langere teksten / geen logo.
-        **Ideaal voor:** de laatste, belangrijke reminder op de dag zelf.
-
-        **WhatsApp**
-        - ✅ Goedkoper dan SMS.
-        - ✅ Duidelijke berichten met logo, emoji en linkjes.
-        - ✅ Klanten kunnen gemakkelijk antwoorden of bevestigen.
-        - ⚠️ Werkt alleen met internet en WhatsApp.
-        - ⚠️ Bij slechte verbinding kan het later binnenkomen.
-        **Ideaal voor:** herinnering 1 of enkele dagen vóór de afspraak.
-
-        **E-mail**
-        - ✅ Praktisch gratis.
-        - ✅ Perfect voor bevestigingen en uitgebreide info.
-        - ⚠️ Niet altijd direct gelezen, kan in spam belanden.
-        **Ideaal voor:** boekingsbevestiging + extra informatie.
-
-        **Aanbevolen combinatie**
-        - 1e herinnering (dagen ervoor): **WhatsApp + e-mail** (kostefficiënt & duidelijk).
-        - 2e herinnering (dag zelf): optioneel **SMS** voor maximale zekerheid.
-        """
-    )
 
 
 def render_account(cid: int):
