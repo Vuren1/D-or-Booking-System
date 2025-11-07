@@ -680,10 +680,35 @@ def render_bundles_and_usage(cid: int):
         """
     )
 
-    st.info(
-        "Deze bundelknoppen simuleren het toevoegen van tegoed. "
-        "In productie koppel je dit aan betalingen (Stripe/Mollie) "
-        "of activeer je bundels handmatig per klant."
+        st.info(
+        """
+        **Welke herinneringskanalen kies je het beste?**
+
+        **SMS**
+        - ✅ Komt bijna altijd aan, ook zonder internet.
+        - ✅ Werkt op elke GSM.
+        - ⚠️ Duurder per bericht.
+        - ⚠️ Minder geschikt voor langere teksten / geen logo.
+        **Ideaal voor:** de laatste, belangrijke reminder op de dag zelf.
+
+        **WhatsApp**
+        - ✅ Goedkoper dan SMS.
+        - ✅ Duidelijke berichten met logo, emoji en linkjes.
+        - ✅ Klanten kunnen gemakkelijk antwoorden of bevestigen.
+        - ⚠️ Werkt alleen met internet en WhatsApp.
+        - ⚠️ Bij slechte verbinding kan het later binnenkomen.
+        **Ideaal voor:** herinnering 1 of enkele dagen vóór de afspraak.
+
+        **E-mail**
+        - ✅ Praktisch gratis.
+        - ✅ Perfect voor bevestigingen en uitgebreide info.
+        - ⚠️ Niet altijd direct gelezen, kan in spam belanden.
+        **Ideaal voor:** boekingsbevestiging + extra informatie.
+
+        **Aanbevolen combinatie**
+        - 1e herinnering (dagen ervoor): **WhatsApp + e-mail** (kostefficiënt & duidelijk).
+        - 2e herinnering (dag zelf): optioneel **SMS** voor maximale zekerheid.
+        """
     )
 
 
