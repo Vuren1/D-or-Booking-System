@@ -616,41 +616,30 @@ def render_bundles_and_usage(cid: int):
     elif sc < 50:
         st.info("Je SMS-tegoed is bijna op.")
 
-    st.markdown("### WhatsApp-bundels")
-    c1, c2, c3 = st.columns(3)
-    if c1.button("Koop WA bundel S (250)", key="buy_wa_250"):
-        add_whatsapp_credits(cid, 250)
-        _success("WhatsApp bundel S toegevoegd (+250).")
-        st.rerun()
-    if c2.button("Koop WA bundel M (500)", key="buy_wa_500"):
-        add_whatsapp_credits(cid, 500)
-        _success("WhatsApp bundel M toegevoegd (+500).")
-        st.rerun()
-    if c3.button("Koop WA bundel L (1000)", key="buy_wa_1000"):
-        add_whatsapp_credits(cid, 1000)
-        _success("WhatsApp bundel L toegevoegd (+1000).")
-        st.rerun()
+        st.markdown("---")
+    st.markdown("### Tarieven (voorbeeld, aanpasbaar)")
 
-    st.markdown("### SMS-bundels")
-    s1, s2, s3 = st.columns(3)
-    if s1.button("Koop SMS bundel S (100)", key="buy_sms_100"):
-        add_sms_credits(cid, 100)
-        _success("SMS bundel S toegevoegd (+100).")
-        st.rerun()
-    if s2.button("Koop SMS bundel M (250)", key="buy_sms_250"):
-        add_sms_credits(cid, 250)
-        _success("SMS bundel M toegevoegd (+250).")
-        st.rerun()
-    if s3.button("Koop SMS bundel L (500)", key="buy_sms_500"):
-        add_sms_credits(cid, 500)
-        _success("SMS bundel L toegevoegd (+500).")
-        st.rerun()
+    st.markdown(
+        """
+        **WhatsApp-bundels**  \\
+        - Bundel S (250 berichten): **€15**  \\
+        - Bundel M (500 berichten): **€28**  \\
+        - Bundel L (1.000 berichten): **€52**
 
-    st.markdown("### Extra e-mail limiet (optioneel)")
-    if st.button("Voeg 1000 extra e-mails toe", key="buy_email_extra"):
-        add_email_limit(cid, 1000)
-        _success("E-mail limiet verhoogd met 1000.")
-        st.rerun()
+        **SMS-bundels**  \\
+        - Bundel S (100 berichten): **€15**  \\
+        - Bundel M (250 berichten): **€35**  \\
+        - Bundel L (500 berichten): **€65**
+
+        **E-mail**  \\
+        - Inclusief in D’or Basic, bijv. tot **1.000 e-mails / maand**.  \\
+        - Extra 1.000 e-mails: **€5**
+
+        _Prijzen zijn indicatief en kunnen door jou als beheerder worden aangepast.
+        Je klanten betalen alleen voor daadwerkelijke bundels (geen verborgen kosten)._ 
+        """
+    )
+
 
     st.info(
         "Deze bundelknoppen simuleren het toevoegen van tegoed. "
