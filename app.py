@@ -210,7 +210,11 @@ if not company_id:
 company_name = get_company_name_by_id(company_id)
 company_logo = get_company_logo(company_id)
 company_slug = get_company_slug(company_id)
+
 BASE_DOMAIN = os.getenv("BASE_DOMAIN", "dor-booking.com")
+st.caption("Powered by D’or Booking System")
+
+
 
 # =============================
 # Header branding
