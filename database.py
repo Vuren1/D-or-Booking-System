@@ -6,10 +6,14 @@ from typing import Iterable, List, Optional, Tuple
 
 import pandas as pd
 
+# Zorg dat data map bestaat
 os.makedirs("data", exist_ok=True)
 DB_NAME = "data/bookings.db"
 
 
+# =============================
+# DB helpers
+# =============================
 def get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_NAME, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -29,6 +33,9 @@ def _slugify(name: str) -> str:
     return value or "bedrijf"
 
 
+# =============================
+# INIT / MIGRATIES
+# =============================
 def init_db():
     conn = get_connection()
     c = conn.cursor()
@@ -48,6 +55,7 @@ def init_db():
         )
         """
     )
+    # migreer kolommen indien ontbreken
     for ddl in [
         "ALTER TABLE companies ADD COLUMN slug TEXT UNIQUE",
         "ALTER TABLE companies ADD COLUMN logo_path TEXT",
@@ -57,7 +65,7 @@ def init_db():
         except Exception:
             pass
 
-    # Slugs invullen voor bestaande
+    # Slugs invullen voor bestaande bedrijven
     try:
         c.execute("SELECT id, name FROM companies WHERE slug IS NULL OR slug = ''")
         for row in c.fetchall():
@@ -131,12 +139,23 @@ def init_db():
             start_time  TEXT NOT NULL,
             end_time    TEXT NOT NULL,
             total_price REAL NOT NULL DEFAULT 0,
+            status      TEXT NOT NULL DEFAULT 'scheduled',
             created_at  TEXT,
             FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
         )
         """
     )
+    # status toevoegen bij oudere db
+    try:
+        cols = {row["name"] for row in c.execute("PRAGMA table_info(bookings)")}
+        if "status" not in cols:
+            c.execute(
+                "ALTER TABLE bookings ADD COLUMN status TEXT NOT NULL DEFAULT 'scheduled'"
+            )
+    except Exception:
+        pass
 
+    # ---------------- Booking items ----------------
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS booking_items (
@@ -181,37 +200,99 @@ def init_db():
         """
     )
 
-    # Migrate extra kolommen indien oude tabel
-    columns = {row["name"] for row in c.execute("PRAGMA table_info(reminder_settings)")}
-    def add_col(name, ddl):
-        if name not in columns:
+    # kolommen toevoegen indien oude versie
+    try:
+        rcols = {row["name"] for row in c.execute("PRAGMA table_info(reminder_settings)")}
+    except sqlite3.OperationalError:
+        rcols = set()
+
+    def add_rem_col(name: str, ddl: str):
+        if name not in rcols:
             try:
                 c.execute(ddl)
             except Exception:
                 pass
 
-    add_col("rem1_days_before",   "ALTER TABLE reminder_settings ADD COLUMN rem1_days_before INTEGER NOT NULL DEFAULT 1")
-    add_col("rem1_time",          "ALTER TABLE reminder_settings ADD COLUMN rem1_time TEXT NOT NULL DEFAULT '09:00'")
-    add_col("rem1_sms",           "ALTER TABLE reminder_settings ADD COLUMN rem1_sms INTEGER NOT NULL DEFAULT 0")
-    add_col("rem1_whatsapp",      "ALTER TABLE reminder_settings ADD COLUMN rem1_whatsapp INTEGER NOT NULL DEFAULT 0")
-    add_col("rem1_email",         "ALTER TABLE reminder_settings ADD COLUMN rem1_email INTEGER NOT NULL DEFAULT 0")
-    add_col("rem1_message_sms",   "ALTER TABLE reminder_settings ADD COLUMN rem1_message_sms TEXT")
-    add_col("rem1_message_whatsapp", "ALTER TABLE reminder_settings ADD COLUMN rem1_message_whatsapp TEXT")
-    add_col("rem1_message_email", "ALTER TABLE reminder_settings ADD COLUMN rem1_message_email TEXT")
+    add_rem_col("rem1_days_before",
+                "ALTER TABLE reminder_settings ADD COLUMN rem1_days_before INTEGER NOT NULL DEFAULT 1")
+    add_rem_col("rem1_time",
+                "ALTER TABLE reminder_settings ADD COLUMN rem1_time TEXT NOT NULL DEFAULT '09:00'")
+    add_rem_col("rem1_sms",
+                "ALTER TABLE reminder_settings ADD COLUMN rem1_sms INTEGER NOT NULL DEFAULT 0")
+    add_rem_col("rem1_whatsapp",
+                "ALTER TABLE reminder_settings ADD COLUMN rem1_whatsapp INTEGER NOT NULL DEFAULT 0")
+    add_rem_col("rem1_email",
+                "ALTER TABLE reminder_settings ADD COLUMN rem1_email INTEGER NOT NULL DEFAULT 0")
+    add_rem_col("rem1_message_sms",
+                "ALTER TABLE reminder_settings ADD COLUMN rem1_message_sms TEXT")
+    add_rem_col("rem1_message_whatsapp",
+                "ALTER TABLE reminder_settings ADD COLUMN rem1_message_whatsapp TEXT")
+    add_rem_col("rem1_message_email",
+                "ALTER TABLE reminder_settings ADD COLUMN rem1_message_email TEXT")
+    add_rem_col("rem2_minutes_before",
+                "ALTER TABLE reminder_settings ADD COLUMN rem2_minutes_before INTEGER NOT NULL DEFAULT 60")
+    add_rem_col("rem2_sms",
+                "ALTER TABLE reminder_settings ADD COLUMN rem2_sms INTEGER NOT NULL DEFAULT 0")
+    add_rem_col("rem2_whatsapp",
+                "ALTER TABLE reminder_settings ADD COLUMN rem2_whatsapp INTEGER NOT NULL DEFAULT 0")
+    add_rem_col("rem2_email",
+                "ALTER TABLE reminder_settings ADD COLUMN rem2_email INTEGER NOT NULL DEFAULT 0")
+    add_rem_col("rem2_message_sms",
+                "ALTER TABLE reminder_settings ADD COLUMN rem2_message_sms TEXT")
+    add_rem_col("rem2_message_whatsapp",
+                "ALTER TABLE reminder_settings ADD COLUMN rem2_message_whatsapp TEXT")
+    add_rem_col("rem2_message_email",
+                "ALTER TABLE reminder_settings ADD COLUMN rem2_message_email TEXT")
 
-    add_col("rem2_minutes_before", "ALTER TABLE reminder_settings ADD COLUMN rem2_minutes_before INTEGER NOT NULL DEFAULT 60")
-    add_col("rem2_sms",            "ALTER TABLE reminder_settings ADD COLUMN rem2_sms INTEGER NOT NULL DEFAULT 0")
-    add_col("rem2_whatsapp",       "ALTER TABLE reminder_settings ADD COLUMN rem2_whatsapp INTEGER NOT NULL DEFAULT 0")
-    add_col("rem2_email",          "ALTER TABLE reminder_settings ADD COLUMN rem2_email INTEGER NOT NULL DEFAULT 0")
-    add_col("rem2_message_sms",    "ALTER TABLE reminder_settings ADD COLUMN rem2_message_sms TEXT")
-    add_col("rem2_message_whatsapp", "ALTER TABLE reminder_settings ADD COLUMN rem2_message_whatsapp TEXT")
-    add_col("rem2_message_email",  "ALTER TABLE reminder_settings ADD COLUMN rem2_message_email TEXT")
+    # ---------------- Message balances (bundels & verbruik) ----------------
+    c.execute(
+        """
+        CREATE TABLE IF NOT EXISTS message_balances (
+            company_id      INTEGER PRIMARY KEY,
+            whatsapp_credits INTEGER NOT NULL DEFAULT 0,
+            sms_credits      INTEGER NOT NULL DEFAULT 0,
+            email_limit      INTEGER NOT NULL DEFAULT 1000,
+            email_used       INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        )
+        """
+    )
+    try:
+        mcols = {row["name"] for row in c.execute("PRAGMA table_info(message_balances)")}
+    except sqlite3.OperationalError:
+        mcols = set()
+
+    def add_mb_col(name: str, ddl: str):
+        if name not in mcols:
+            try:
+                c.execute(ddl)
+            except Exception:
+                pass
+
+    add_mb_col(
+        "whatsapp_credits",
+        "ALTER TABLE message_balances ADD COLUMN whatsapp_credits INTEGER NOT NULL DEFAULT 0",
+    )
+    add_mb_col(
+        "sms_credits",
+        "ALTER TABLE message_balances ADD COLUMN sms_credits INTEGER NOT NULL DEFAULT 0",
+    )
+    add_mb_col(
+        "email_limit",
+        "ALTER TABLE message_balances ADD COLUMN email_limit INTEGER NOT NULL DEFAULT 1000",
+    )
+    add_mb_col(
+        "email_used",
+        "ALTER TABLE message_balances ADD COLUMN email_used INTEGER NOT NULL DEFAULT 0",
+    )
 
     conn.commit()
     conn.close()
 
 
-# =============== Companies ===============
+# =============================
+# COMPANIES
+# =============================
 def add_company(name: str, email: str, password: str) -> int:
     conn = get_connection()
     try:
@@ -229,12 +310,25 @@ def add_company(name: str, email: str, password: str) -> int:
             slug = f"{base}-{i}"
 
         c.execute(
-            "INSERT INTO companies (name, email, password, paid, created_at, slug) "
-            "VALUES (?,?,?,?,?,?)",
+            """
+            INSERT INTO companies (name, email, password, paid, created_at, slug)
+            VALUES (?,?,?,?,?,?)
+            """,
             (name, email, password, 0, created_at, slug),
         )
+        cid = c.lastrowid
+
+        # message balance entry aanmaken
+        c.execute(
+            """
+            INSERT OR IGNORE INTO message_balances (company_id)
+            VALUES (?)
+            """,
+            (cid,),
+        )
+
         conn.commit()
-        return c.lastrowid
+        return cid
     except Exception as e:
         print("add_company error:", e)
         return -1
@@ -291,7 +385,10 @@ def set_company_logo(company_id: int, logo_path: str) -> bool:
     conn = get_connection()
     try:
         c = conn.cursor()
-        c.execute("UPDATE companies SET logo_path=? WHERE id=?", (logo_path, company_id))
+        c.execute(
+            "UPDATE companies SET logo_path=? WHERE id=?",
+            (logo_path, company_id),
+        )
         conn.commit()
         return True
     except Exception:
@@ -321,7 +418,10 @@ def is_company_paid(company_id: int) -> bool:
 def update_company_paid(company_id: int, paid: bool):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("UPDATE companies SET paid=? WHERE id=?", (1 if paid else 0, company_id))
+    c.execute(
+        "UPDATE companies SET paid=? WHERE id=?",
+        (1 if paid else 0, company_id),
+    )
     conn.commit()
     conn.close()
 
@@ -354,11 +454,18 @@ def update_company_profile(
         conn.close()
 
 
-# =============== Categories ===============
+# =============================
+# CATEGORIES
+# =============================
 def get_categories(company_id: int) -> pd.DataFrame:
     conn = get_connection()
     df = pd.read_sql_query(
-        "SELECT id, name, description FROM categories WHERE company_id=? ORDER BY name",
+        """
+        SELECT id, name, description
+        FROM categories
+        WHERE company_id=?
+        ORDER BY name
+        """,
         conn,
         params=(company_id,),
     )
@@ -371,12 +478,18 @@ def add_category(company_id: int, name: str, description: str = "") -> int:
     try:
         c = conn.cursor()
         c.execute(
-            "INSERT OR IGNORE INTO categories (company_id, name, description) VALUES (?,?,?)",
+            """
+            INSERT OR IGNORE INTO categories (company_id, name, description)
+            VALUES (?,?,?)
+            """,
             (company_id, name, description),
         )
         conn.commit()
         c.execute(
-            "SELECT id FROM categories WHERE company_id=? AND name=?",
+            """
+            SELECT id FROM categories
+            WHERE company_id=? AND name=?
+            """,
             (company_id, name),
         )
         row = c.fetchone()
@@ -389,7 +502,9 @@ def upsert_category(company_id: int, name: str, description: str = "") -> int:
     return add_category(company_id, name, description)
 
 
-# =============== Services ===============
+# =============================
+# SERVICES
+# =============================
 def get_services(company_id: int) -> pd.DataFrame:
     conn = get_connection()
     df = pd.read_sql_query(
@@ -423,7 +538,15 @@ def add_service(
             INSERT INTO services (company_id, name, price, duration, category, description, is_active)
             VALUES (?,?,?,?,?,?,?)
             """,
-            (company_id, name, price, duration, category, description, 1 if is_active else 0),
+            (
+                company_id,
+                name,
+                price,
+                duration,
+                category,
+                description,
+                1 if is_active else 0,
+            ),
         )
         conn.commit()
         return c.lastrowid
@@ -468,7 +591,10 @@ def update_service(
     conn = get_connection()
     try:
         c = conn.cursor()
-        c.execute(f"UPDATE services SET {', '.join(sets)} WHERE id=?", params)
+        c.execute(
+            f"UPDATE services SET {', '.join(sets)} WHERE id=?",
+            params,
+        )
         conn.commit()
         return True
     finally:
@@ -506,7 +632,9 @@ def get_public_services(company_id: int) -> pd.DataFrame:
     return df
 
 
-# =============== Availability ===============
+# =============================
+# AVAILABILITY
+# =============================
 _DUTCH_DAYS = [
     "Maandag",
     "Dinsdag",
@@ -518,7 +646,9 @@ _DUTCH_DAYS = [
 ]
 
 
-def add_availability(company_id: int, day: str, start_time: dtime, end_time: dtime) -> int:
+def add_availability(
+    company_id: int, day: str, start_time: dtime, end_time: dtime
+) -> int:
     conn = get_connection()
     try:
         c = conn.cursor()
@@ -527,7 +657,12 @@ def add_availability(company_id: int, day: str, start_time: dtime, end_time: dti
             INSERT INTO availability (company_id, day, start_time, end_time)
             VALUES (?,?,?,?)
             """,
-            (company_id, day, start_time.strftime("%H:%M"), end_time.strftime("%H:%M")),
+            (
+                company_id,
+                day,
+                start_time.strftime("%H:%M"),
+                end_time.strftime("%H:%M"),
+            ),
         )
         conn.commit()
         return c.lastrowid
@@ -556,9 +691,14 @@ def get_availability(company_id: int) -> pd.DataFrame:
     return df
 
 
-# =============== Slots ===============
+# =============================
+# TIME SLOTS (optioneel)
+# =============================
 def get_available_slots_for_duration(
-    company_id: int, target_date: ddate, duration_minutes: int, step_minutes: int = 15
+    company_id: int,
+    target_date: ddate,
+    duration_minutes: int,
+    step_minutes: int = 15,
 ) -> List[str]:
     weekday_idx = target_date.weekday()
     day_name = _DUTCH_DAYS[weekday_idx]
@@ -571,7 +711,11 @@ def get_available_slots_for_duration(
     conn = get_connection()
     c = conn.cursor()
     c.execute(
-        "SELECT start_time, end_time FROM bookings WHERE company_id=? AND date=?",
+        """
+        SELECT start_time, end_time
+        FROM bookings
+        WHERE company_id=? AND date=?
+        """,
         (company_id, target_date.strftime("%Y-%m-%d")),
     )
     busy = [(r["start_time"], r["end_time"]) for r in c.fetchall()]
@@ -605,7 +749,9 @@ def get_available_slots_for_duration(
     return slots
 
 
-# =============== Bookings ===============
+# =============================
+# BOOKINGS
+# =============================
 def add_booking_with_items(
     company_id: int,
     customer: str,
@@ -627,8 +773,11 @@ def add_booking_with_items(
         c = conn.cursor()
         c.execute(
             """
-            INSERT INTO bookings (company_id, customer, date, start_time, end_time, total_price, created_at)
-            VALUES (?,?,?,?,?,?,?)
+            INSERT INTO bookings (
+                company_id, customer, date, start_time, end_time,
+                total_price, status, created_at
+            )
+            VALUES (?,?,?,?,?,?,?,?)
             """,
             (
                 company_id,
@@ -637,6 +786,7 @@ def add_booking_with_items(
                 start_time,
                 end_time,
                 total_price,
+                "scheduled",
                 datetime.utcnow().isoformat(),
             ),
         )
@@ -667,7 +817,7 @@ def get_bookings(company_id: int) -> pd.DataFrame:
     conn = get_connection()
     df = pd.read_sql_query(
         """
-        SELECT id, customer, date, start_time, end_time, total_price
+        SELECT id, customer, date, start_time, end_time, total_price, status
         FROM bookings
         WHERE company_id=?
         ORDER BY date DESC, start_time DESC
@@ -683,9 +833,10 @@ def get_bookings_overview(company_id: int) -> pd.DataFrame:
     conn = get_connection()
     df = pd.read_sql_query(
         """
-        SELECT date,
-               COUNT(*)         AS total_bookings,
-               SUM(total_price) AS revenue
+        SELECT
+            date,
+            COUNT(*)           AS total_bookings,
+            SUM(total_price)   AS revenue
         FROM bookings
         WHERE company_id=?
         GROUP BY date
@@ -698,7 +849,71 @@ def get_bookings_overview(company_id: int) -> pd.DataFrame:
     return df
 
 
-# =============== Reminders ===============
+def update_booking_status(
+    company_id: int, booking_id: int, status: str
+) -> bool:
+    status = status.lower().strip()
+    if status not in {"scheduled", "completed", "no_show", "cancelled"}:
+        return False
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            UPDATE bookings
+            SET status=?
+            WHERE id=? AND company_id=?
+            """,
+            (status, booking_id, company_id),
+        )
+        conn.commit()
+        return c.rowcount > 0
+    finally:
+        conn.close()
+
+
+def get_status_overview(company_id: int) -> pd.DataFrame:
+    conn = get_connection()
+    df = pd.read_sql_query(
+        """
+        SELECT status, COUNT(*) AS count
+        FROM bookings
+        WHERE company_id=?
+        GROUP BY status
+        """,
+        conn,
+        params=(company_id,),
+    )
+    conn.close()
+    return df
+
+
+def get_customer_stats(company_id: int) -> pd.DataFrame:
+    conn = get_connection()
+    df = pd.read_sql_query(
+        """
+        SELECT
+            TRIM(customer) AS customer,
+            COUNT(*)       AS total_bookings,
+            SUM(total_price) AS total_revenue,
+            MAX(date)      AS last_date
+        FROM bookings
+        WHERE company_id=?
+          AND customer IS NOT NULL
+          AND TRIM(customer) <> ''
+        GROUP BY TRIM(customer)
+        ORDER BY total_bookings DESC, last_date DESC
+        """,
+        conn,
+        params=(company_id,),
+    )
+    conn.close()
+    return df
+
+
+# =============================
+# REMINDER SETTINGS
+# =============================
 def get_reminder_settings(company_id: int) -> pd.DataFrame:
     conn = get_connection()
     df = pd.read_sql_query(
@@ -729,6 +944,7 @@ def get_reminder_settings(company_id: int) -> pd.DataFrame:
     conn.close()
 
     if df.empty:
+        # standaard template
         df = pd.DataFrame(
             [
                 dict(
@@ -737,17 +953,25 @@ def get_reminder_settings(company_id: int) -> pd.DataFrame:
                     rem1_time="09:00",
                     rem1_sms=0,
                     rem1_whatsapp=0,
-                    rem1_email=0,
+                    rem1_email=1,
                     rem1_message_sms="Beste {klantnaam}, dit is een herinnering voor uw afspraak op {datum} om {tijd}.",
                     rem1_message_whatsapp="Beste {klantnaam}, we zien u graag op {datum} om {tijd}.",
-                    rem1_message_email="Beste {klantnaam},\\n\\nDit is een herinnering voor uw afspraak op {datum} om {tijd}.\\n\\nMet vriendelijke groeten,\\n{bedrijfsnaam}",
+                    rem1_message_email=(
+                        "Beste {klantnaam},\n\n"
+                        "Dit is een herinnering voor uw afspraak op {datum} om {tijd}.\n\n"
+                        "Met vriendelijke groeten,\n{bedrijfsnaam}"
+                    ),
                     rem2_minutes_before=60,
                     rem2_sms=0,
                     rem2_whatsapp=0,
                     rem2_email=0,
                     rem2_message_sms="Beste {klantnaam}, uw afspraak start om {tijd}. Tot zo!",
-                    rem2_message_whatsapp="Hi {klantnaam}, een korte herinnering: uw afspraak begint om {tijd}.",
-                    rem2_message_email="Beste {klantnaam},\\n\\nEen korte herinnering dat uw afspraak binnenkort start om {tijd}.\\n\\nMet vriendelijke groeten,\\n{bedrijfsnaam}",
+                    rem2_message_whatsapp="Hi {klantnaam}, uw afspraak begint om {tijd}. Tot zo!",
+                    rem2_message_email=(
+                        "Beste {klantnaam},\n\n"
+                        "Uw afspraak start bijna, om {tijd}.\n\n"
+                        "Met vriendelijke groeten,\n{bedrijfsnaam}"
+                    ),
                 )
             ]
         )
@@ -775,7 +999,7 @@ def get_reminder_settings(company_id: int) -> pd.DataFrame:
             df[col] = val
         df[col] = df[col].fillna(val)
 
-    return df.iloc[[0]]  # altijd één rij
+    return df.iloc[[0]]
 
 
 def upsert_reminder_settings(
@@ -820,25 +1044,24 @@ def upsert_reminder_settings(
                 rem2_message_sms,
                 rem2_message_whatsapp,
                 rem2_message_email
-            )
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(company_id) DO UPDATE SET
-                active               = excluded.active,
-                rem1_days_before     = excluded.rem1_days_before,
-                rem1_time            = excluded.rem1_time,
-                rem1_sms             = excluded.rem1_sms,
-                rem1_whatsapp        = excluded.rem1_whatsapp,
-                rem1_email           = excluded.rem1_email,
-                rem1_message_sms     = excluded.rem1_message_sms,
-                rem1_message_whatsapp= excluded.rem1_message_whatsapp,
-                rem1_message_email   = excluded.rem1_message_email,
-                rem2_minutes_before  = excluded.rem2_minutes_before,
-                rem2_sms             = excluded.rem2_sms,
-                rem2_whatsapp        = excluded.rem2_whatsapp,
-                rem2_email           = excluded.rem2_email,
-                rem2_message_sms     = excluded.rem2_message_sms,
-                rem2_message_whatsapp= excluded.rem2_message_whatsapp,
-                rem2_message_email   = excluded.rem2_message_email
+                active                = excluded.active,
+                rem1_days_before      = excluded.rem1_days_before,
+                rem1_time             = excluded.rem1_time,
+                rem1_sms              = excluded.rem1_sms,
+                rem1_whatsapp         = excluded.rem1_whatsapp,
+                rem1_email            = excluded.rem1_email,
+                rem1_message_sms      = excluded.rem1_message_sms,
+                rem1_message_whatsapp = excluded.rem1_message_whatsapp,
+                rem1_message_email    = excluded.rem1_message_email,
+                rem2_minutes_before   = excluded.rem2_minutes_before,
+                rem2_sms              = excluded.rem2_sms,
+                rem2_whatsapp         = excluded.rem2_whatsapp,
+                rem2_email            = excluded.rem2_email,
+                rem2_message_sms      = excluded.rem2_message_sms,
+                rem2_message_whatsapp = excluded.rem2_message_whatsapp,
+                rem2_message_email    = excluded.rem2_message_email
             """,
             (
                 company_id,
@@ -864,3 +1087,177 @@ def upsert_reminder_settings(
         return True
     finally:
         conn.close()
+
+
+# =============================
+# MESSAGE BUNDLES & USAGE
+# =============================
+def ensure_message_balance(company_id: int):
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT OR IGNORE INTO message_balances (company_id)
+            VALUES (?)
+            """,
+            (company_id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_message_balances(company_id: int) -> dict:
+    ensure_message_balance(company_id)
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        """
+        SELECT whatsapp_credits, sms_credits, email_limit, email_used
+        FROM message_balances
+        WHERE company_id=?
+        """,
+        (company_id,),
+    )
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return dict(
+            whatsapp_credits=0,
+            sms_credits=0,
+            email_limit=1000,
+            email_used=0,
+        )
+    return dict(row)
+
+
+def add_whatsapp_credits(company_id: int, amount: int):
+    ensure_message_balance(company_id)
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            UPDATE message_balances
+            SET whatsapp_credits = whatsapp_credits + ?
+            WHERE company_id=?
+            """,
+            (int(amount), company_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_sms_credits(company_id: int, amount: int):
+    ensure_message_balance(company_id)
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            UPDATE message_balances
+            SET sms_credits = sms_credits + ?
+            WHERE company_id=?
+            """,
+            (int(amount), company_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_email_limit(company_id: int, extra_limit: int):
+    ensure_message_balance(company_id)
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            UPDATE message_balances
+            SET email_limit = email_limit + ?
+            WHERE company_id=?
+            """,
+            (int(extra_limit), company_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def register_message_usage(
+    company_id: int, msg_type: str, count: int = 1
+) -> bool:
+    """
+    Trek credits af (whatsapp/sms) of verhoog email_used.
+    Return False als er onvoldoende tegoed is.
+    Dit wordt door je scheduler / notificatie-service gebruikt.
+    """
+    ensure_message_balance(company_id)
+    msg_type = msg_type.lower()
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT whatsapp_credits, sms_credits, email_limit, email_used
+            FROM message_balances
+            WHERE company_id=?
+            """,
+            (company_id,),
+        )
+        row = c.fetchone()
+        if not row:
+            return False
+        wc = int(row["whatsapp_credits"])
+        sc = int(row["sms_credits"])
+        el = int(row["email_limit"])
+        eu = int(row["email_used"])
+        count = int(count)
+
+        if msg_type == "whatsapp":
+            if wc < count:
+                return False
+            c.execute(
+                """
+                UPDATE message_balances
+                SET whatsapp_credits = whatsapp_credits - ?
+                WHERE company_id=?
+                """,
+                (count, company_id),
+            )
+        elif msg_type == "sms":
+            if sc < count:
+                return False
+            c.execute(
+                """
+                UPDATE message_balances
+                SET sms_credits = sms_credits - ?
+                WHERE company_id=?
+                """,
+                (count, company_id),
+            )
+        elif msg_type == "email":
+            if eu + count > el:
+                return False
+            c.execute(
+                """
+                UPDATE message_balances
+                SET email_used = email_used + ?
+                WHERE company_id=?
+                """,
+                (count, company_id),
+            )
+        else:
+            return False
+
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def get_message_usage_summary(company_id: int) -> dict:
+    """Gebruik voor UI: huidige credits + e-mail gebruik."""
+    return get_message_balances(company_id)
