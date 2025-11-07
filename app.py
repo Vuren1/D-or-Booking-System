@@ -619,15 +619,15 @@ def render_bundles_and_usage(cid: int):
     # ---------------- WhatsApp bundels ----------------
     st.markdown("### WhatsApp-bundels")
     c1, c2, c3 = st.columns(3)
-    if c1.button("Koop WA bundel S (250)", key="buy_wa_250"):
+    if c1.button("Koop WA bundel S (250)", key=f"buy_wa_250_{cid}"):
         add_whatsapp_credits(cid, 250)
         _success("WhatsApp bundel S toegevoegd (+250).")
         st.rerun()
-    if c2.button("Koop WA bundel M (500)", key="buy_wa_500"):
+    if c2.button("Koop WA bundel M (500)", key=f"buy_wa_500_{cid}"):
         add_whatsapp_credits(cid, 500)
         _success("WhatsApp bundel M toegevoegd (+500).")
         st.rerun()
-    if c3.button("Koop WA bundel L (1000)", key="buy_wa_1000"):
+    if c3.button("Koop WA bundel L (1000)", key=f"buy_wa_1000_{cid}"):
         add_whatsapp_credits(cid, 1000)
         _success("WhatsApp bundel L toegevoegd (+1000).")
         st.rerun()
@@ -635,29 +635,22 @@ def render_bundles_and_usage(cid: int):
     # ---------------- SMS bundels ----------------
     st.markdown("### SMS-bundels")
     s1, s2, s3 = st.columns(3)
-    if s1.button("Koop SMS bundel S (100)", key="buy_sms_100"):
+    if s1.button("Koop SMS bundel S (100)", key=f"buy_sms_100_{cid}"):
         add_sms_credits(cid, 100)
         _success("SMS bundel S toegevoegd (+100).")
         st.rerun()
-    if s2.button("Koop SMS bundel M (250)", key="buy_sms_250"):
+    if s2.button("Koop SMS bundel M (250)", key=f"buy_sms_250_{cid}"):
         add_sms_credits(cid, 250)
         _success("SMS bundel M toegevoegd (+250).")
         st.rerun()
-    if s3.button("Koop SMS bundel L (500)", key="buy_sms_500"):
+    if s3.button("Koop SMS bundel L (500)", key=f"buy_sms_500_{cid}"):
         add_sms_credits(cid, 500)
         _success("SMS bundel L toegevoegd (+500).")
         st.rerun()
 
     # ---------------- Extra e-mail limiet ----------------
     st.markdown("### Extra e-mail limiet (optioneel)")
-    if st.button("Voeg 1000 extra e-mails toe", key="buy_email_extra"):
-        add_email_limit(cid, 1000)
-        _success("E-mail limiet verhoogd met 1000.")
-        st.rerun()
-
-        # ---------------- Extra e-mail limiet ----------------
-    st.markdown("### Extra e-mail limiet (optioneel)")
-    if st.button("Voeg 1000 extra e-mails toe", key="buy_email_extra"):
+    if st.button("Voeg 1000 extra e-mails toe", key=f"buy_email_extra_{cid}"):
         add_email_limit(cid, 1000)
         _success("E-mail limiet verhoogd met 1000.")
         st.rerun()
@@ -718,8 +711,6 @@ def render_bundles_and_usage(cid: int):
         Je klanten betalen alleen voor daadwerkelijke bundels (geen verborgen kosten)._ 
         """
     )
-
-
 
 def render_account(cid: int):
     st.markdown("## Account & abonnement")
