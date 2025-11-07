@@ -210,11 +210,7 @@ if not company_id:
 company_name = get_company_name_by_id(company_id)
 company_logo = get_company_logo(company_id)
 company_slug = get_company_slug(company_id)
-
 BASE_DOMAIN = os.getenv("BASE_DOMAIN", "dor-booking.com")
-st.caption("Powered by D’or Booking System")
-
-
 
 # =============================
 # Header branding
@@ -222,12 +218,12 @@ st.caption("Powered by D’or Booking System")
 st.caption("Powered by D’or Booking System")
 
 if company_logo:
-    # Logo mooi centreren
+    # Logo mooi centreren als het pad geldig is
     left, center, right = st.columns([1, 2, 1])
     with center:
         st.image(company_logo, use_column_width=False)
 else:
-    # Fallback als er nog geen logo is
+    # Fallback icoon als er nog geen logo is
     st.markdown(
         """
         <div style="text-align:center; margin-top:0.5rem; margin-bottom:1rem;">
@@ -237,6 +233,14 @@ else:
         unsafe_allow_html=True,
     )
 
+# Titel + publieke link
+st.markdown(f"### Beheeromgeving voor **{company_name}**")
+
+if company_slug:
+    st.caption(
+        "Jouw publieke boekingslink: "
+        f"`https://{company_slug}.{BASE_DOMAIN}`"
+    )
 
 # =============================
 # Sidebar navigatie
