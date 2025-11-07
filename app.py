@@ -19,7 +19,7 @@ from database import (
     update_company_profile,
     set_company_logo,
     get_company_logo,
-    # services & categories
+    # categories & services
     get_categories,
     get_services,
     add_service,
@@ -32,14 +32,30 @@ from database import (
     # reminders
     get_reminder_settings,
     upsert_reminder_settings,
+    # bundles & usage
+    get_message_usage_summary,
+    add_whatsapp_credits,
+    add_sms_credits,
+    add_email_limit,
+    # stats
+    get_customer_stats,
+    get_status_overview,
 )
 
 APP_LOGO_URL = os.getenv("APP_LOGO_URL", "")
 
-st.set_page_config(page_title="D’or Booking System", page_icon="💫", layout="wide")
+st.set_page_config(
+    page_title="D’or Booking System",
+    page_icon="💫",
+    layout="wide",
+)
+
 init_db()
 
 
+# =============================
+# Helpers
+# =============================
 def _format_money(x) -> str:
     try:
         return f"€{float(x):.2f}".replace(".", ",")
@@ -59,31 +75,51 @@ def _error(msg: str):
     st.error(msg)
 
 
-# ---------------- Login / registratie ----------------
-def _select_or_create_company():
-    params = st.experimental_get_query_params()
-    param_company = params.get("company", [None])[0]
+def _get_query_params():
+    """Compat wrapper voor nieuwe & oude Streamlit API."""
+    try:
+        return dict(st.query_params)
+    except Exception:
+        return st.experimental_get_query_params()
 
-    # Al ingelogd
+
+def _set_query_params(**kwargs):
+    try:
+        # nieuwe API: hele mapping toewijzen
+        st.query_params = {k: str(v) for k, v in kwargs.items() if v is not None}
+    except Exception:
+        st.experimental_set_query_params(**{k: v for k, v in kwargs.items() if v is not None})
+
+
+# =============================
+# Login / registratie
+# =============================
+def _select_or_create_company():
+    params = _get_query_params()
+    raw_company = params.get("company")
+    if isinstance(raw_company, list):
+        raw_company = raw_company[0]
+    param_company = raw_company
+
+    # Als al ingelogd, toon account in sidebar
     if "company_id" in st.session_state:
         cid = st.session_state["company_id"]
         with st.sidebar:
             st.markdown("### Account")
             name = get_company_name_by_id(cid) or "Onbekend bedrijf"
             st.markdown(f"**Ingelogd als:** {name} (#{cid})")
-            if st.button("Uitloggen", key="logout_btn", use_container_width=True):
+            if st.button("Uitloggen", key="logout_btn_top", use_container_width=True):
                 st.session_state.clear()
-                st.experimental_set_query_params()
+                _set_query_params()
                 st.rerun()
         return cid
 
-    # Inloggen via ?company=
+    # Inlog via URL (?company=slug of id)
     if param_company:
-        value = str(param_company)
-        row = get_company_by_slug(value)
-        if not row and value.isdigit():
+        row = get_company_by_slug(str(param_company))
+        if not row and str(param_company).isdigit():
             try:
-                row = get_company(int(value))
+                row = get_company(int(param_company))
             except Exception:
                 row = None
         if row:
@@ -91,15 +127,18 @@ def _select_or_create_company():
             st.session_state["company_id"] = cid
             return cid
 
-    # UI: login / nieuw bedrijf
+    # Nog niet ingelogd: login/registratie UI in sidebar
     with st.sidebar:
         st.markdown("### Account")
-        tabs = st.tabs(["Inloggen", "Nieuw bedrijf"])
+        login_tab, register_tab = st.tabs(["Inloggen", "Nieuw bedrijf"])
 
-        with tabs[0]:
+        # --- Inloggen ---
+        with login_tab:
             login_email = st.text_input("E-mail", key="login_email")
             login_password = st.text_input(
-                "Wachtwoord", type="password", key="login_password"
+                "Wachtwoord",
+                type="password",
+                key="login_password",
             )
             if st.button("Inloggen", use_container_width=True, key="login_btn"):
                 row = get_company_by_email(login_email.strip())
@@ -110,17 +149,20 @@ def _select_or_create_company():
                         cid = int(row["id"])
                         st.session_state["company_id"] = cid
                         slug = get_company_slug(cid) or str(cid)
-                        st.experimental_set_query_params(company=slug)
+                        _set_query_params(company=slug)
                         _success("Ingelogd.")
                         st.rerun()
                     else:
                         _error("Ongeldig wachtwoord.")
 
-        with tabs[1]:
+        # --- Nieuw bedrijf ---
+        with register_tab:
             reg_name = st.text_input("Bedrijfsnaam", key="reg_name")
             reg_email = st.text_input("E-mail", key="reg_email")
             reg_password = st.text_input(
-                "Wachtwoord", type="password", key="reg_password"
+                "Wachtwoord",
+                type="password",
+                key="reg_password",
             )
             if st.button(
                 "Aanmaken",
@@ -132,82 +174,102 @@ def _select_or_create_company():
                     _error("Vul Bedrijfsnaam, e-mail en wachtwoord in.")
                 else:
                     cid = add_company(
-                        reg_name.strip(), reg_email.strip(), reg_password
+                        reg_name.strip(),
+                        reg_email.strip(),
+                        reg_password,
                     )
                     if cid > 0:
                         st.session_state["company_id"] = cid
                         slug = get_company_slug(cid) or str(cid)
-                        st.experimental_set_query_params(company=slug)
+                        _set_query_params(company=slug)
                         _success("Bedrijf aangemaakt.")
                         st.rerun()
                     else:
                         _error(
                             "Kon bedrijf niet aanmaken. Mogelijk bestaat dit e-mailadres al."
                         )
+
     return None
 
 
 company_id = _select_or_create_company()
 if not company_id:
-    # Alleen login/register + logo
+    # Alleen login/register zichtbaar; rechts plek voor logo / info
     _, col_right = st.columns([1, 2])
     with col_right:
         if APP_LOGO_URL:
             st.image(APP_LOGO_URL, use_column_width=False)
         else:
             st.markdown("## D’or Booking System")
-            st.caption("Pas `APP_LOGO_URL` in app.py aan om hier je logo te tonen.")
+            st.caption(
+                "Jouw slimme afspraken & herinneringen platform. "
+                "Login of registreer via de linkerkant."
+            )
     st.stop()
 
 company_name = get_company_name_by_id(company_id)
 company_logo = get_company_logo(company_id)
 company_slug = get_company_slug(company_id)
 
-# ---------------- Header ----------------
+# =============================
+# Header branding
+# =============================
 if company_logo:
     st.markdown(
-        f'<div style="text-align:center; margin-top:0.5rem; margin-bottom:1rem;">'
-        f'<img src="{company_logo}" alt="{company_name}" style="max-height:80px;"></div>',
+        f"""
+        <div style="text-align:center; margin-top:0.5rem; margin-bottom:1rem;">
+            <img src="{company_logo}" alt="{company_name}" style="max-height:80px;">
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 else:
     st.markdown(
-        '<div style="text-align:center; margin-top:0.5rem; margin-bottom:1rem;">'
-        '<span style="font-size:40px;">💫</span>'
-        "</div>",
+        """
+        <div style="text-align:center; margin-top:0.5rem; margin-bottom:1rem;">
+            <span style="font-size:40px;">💫</span>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
 st.markdown(f"### Beheeromgeving voor **{company_name}**")
+
 if company_slug:
     st.caption(
-        "Publieke boekingslink voor klanten: "
+        "Jouw publieke boekingslink (deel met klanten): "
         f"`?company={company_slug}&view=public`"
     )
 
-# ---------------- Sidebar navigatie ----------------
+# =============================
+# Sidebar navigatie
+# =============================
 with st.sidebar:
     st.markdown("### Navigatie")
     if st.button("Beheeromgeving", use_container_width=True):
-        st.experimental_set_query_params(
+        _set_query_params(
             company=(company_slug or company_id),
             view="admin",
         )
         st.rerun()
-    if st.button("Publieke catalogus bekijken", use_container_width=True):
-        st.experimental_set_query_params(
+    if st.button("Publieke catalogus", use_container_width=True):
+        _set_query_params(
             company=(company_slug or company_id),
             view="public",
         )
         st.rerun()
 
-params = st.experimental_get_query_params()
-view_mode = params.get("view", ["admin"])[0]
+params = _get_query_params()
+view_mode = params.get("view", ["admin"])[0] if isinstance(params.get("view"), list) else params.get("view", "admin")
+if not view_mode:
+    view_mode = "admin"
 
 
-# ---------------- Views ----------------
+# =============================
+# Views
+# =============================
 def render_public_catalog(cid: int):
-    st.markdown("### Diensten & tarieven (publiek)")
+    st.markdown("### Diensten & tarieven")
     df = get_public_services(cid)
     if df.empty:
         _info("Er zijn nog geen gepubliceerde diensten.")
@@ -233,6 +295,7 @@ def render_public_catalog(cid: int):
 
 def render_services(cid: int):
     st.markdown("## Diensten")
+
     cats = get_categories(cid)
     services = get_services(cid)
 
@@ -243,10 +306,10 @@ def render_services(cid: int):
         duration = col1.number_input("Duur (minuten)", min_value=0, step=5)
         category = col2.selectbox(
             "Categorie",
-            ["(geen)"] + list(cats["name"]) if not cats.empty else ["(geen)"],
+            ["(geen)"] + (list(cats["name"]) if not cats.empty else []),
         )
         description = st.text_area("Beschrijving (optioneel)")
-        publish = st.checkbox("Publiceren in publieke catalogus", value=True)
+        publish = st.checkbox("Tonen in publieke catalogus", value=True)
 
         if st.button("Opslaan dienst", type="primary"):
             if not name:
@@ -315,10 +378,16 @@ def render_availability(cid: int):
 
 def render_bookings(cid: int):
     st.markdown("## Boekingen")
+
     overview = get_bookings_overview(cid)
     if not overview.empty:
         st.markdown("### Overzicht per dag")
         st.dataframe(overview, use_container_width=True)
+
+    status_df = get_status_overview(cid)
+    if not status_df.empty:
+        st.markdown("### Status overzicht")
+        st.dataframe(status_df, use_container_width=False)
 
     st.markdown("### Alle boekingen")
     df = get_bookings(cid)
@@ -327,13 +396,13 @@ def render_bookings(cid: int):
     else:
         st.dataframe(df, use_container_width=True)
 
-
-def _parse_time_str(value: str) -> dtime:
-    try:
-        h, m = value.split(":")
-        return dtime(int(h), int(m))
-    except Exception:
-        return dtime(9, 0)
+    # Extra: klantenanalyse
+    cust = get_customer_stats(cid)
+    with st.expander("Klanten & historie"):
+        if cust.empty:
+            _info("Nog geen klantenstatistieken beschikbaar.")
+        else:
+            st.dataframe(cust, use_container_width=True)
 
 
 def render_reminders(cid: int):
@@ -341,16 +410,13 @@ def render_reminders(cid: int):
 
     settings = get_reminder_settings(cid).iloc[0]
 
-    # Globale schakelaar
     global_active = st.checkbox(
         "Herinneringen inschakelen",
         value=bool(settings["active"]),
         key="rem_global_active",
     )
 
-    # =========================
-    # Herinnering 1 - dagen vóór
-    # =========================
+    # -------- Herinnering 1: dagen ervoor --------
     st.markdown("---")
     st.markdown("### Herinnering 1 – dagen vóór de afspraak")
 
@@ -362,8 +428,8 @@ def render_reminders(cid: int):
         value=int(settings["rem1_days_before"]),
         key="rem1_days_before_input",
     )
-    # tijd-string -> time
-    def _parse_time_str(value: str):
+
+    def _parse_time_str(value: str) -> dtime:
         try:
             h, m = value.split(":")
             return dtime(int(h), int(m))
@@ -397,14 +463,18 @@ def render_reminders(cid: int):
     m1_sms = st.text_area(
         "SMS tekst",
         value=str(settings["rem1_message_sms"] or ""),
-        placeholder="Bijvoorbeeld: Beste {klantnaam}, dit is een herinnering voor uw afspraak op {datum} om {tijd}.",
+        placeholder=(
+            "Beste {klantnaam}, dit is een herinnering voor uw afspraak op {datum} om {tijd}."
+        ),
         height=70,
         key="rem1_message_sms_input",
     )
     m1_wa = st.text_area(
         "WhatsApp tekst",
         value=str(settings["rem1_message_whatsapp"] or ""),
-        placeholder="Bijvoorbeeld: Beste {klantnaam}, we zien u graag op {datum} om {tijd}.",
+        placeholder=(
+            "Beste {klantnaam}, we zien u graag op {datum} om {tijd}."
+        ),
         height=70,
         key="rem1_message_whatsapp_input",
     )
@@ -412,7 +482,7 @@ def render_reminders(cid: int):
         "E-mail tekst",
         value=str(settings["rem1_message_email"] or ""),
         placeholder=(
-            "Bijvoorbeeld: Beste {klantnaam},\n\n"
+            "Beste {klantnaam},\n\n"
             "Dit is een herinnering voor uw afspraak op {datum} om {tijd}.\n\n"
             "Met vriendelijke groeten,\n{bedrijfsnaam}"
         ),
@@ -420,9 +490,7 @@ def render_reminders(cid: int):
         key="rem1_message_email_input",
     )
 
-    # =========================
-    # Herinnering 2 - minuten vóór
-    # =========================
+    # -------- Herinnering 2: minuten ervoor --------
     st.markdown("---")
     st.markdown("### Herinnering 2 – minuten vóór de afspraak (zelfde dag)")
 
@@ -456,14 +524,18 @@ def render_reminders(cid: int):
     m2_sms = st.text_area(
         "SMS tekst (zelfde dag)",
         value=str(settings["rem2_message_sms"] or ""),
-        placeholder="Bijvoorbeeld: Beste {klantnaam}, uw afspraak start om {tijd}. Tot zo!",
+        placeholder=(
+            "Beste {klantnaam}, uw afspraak start om {tijd}. Tot zo!"
+        ),
         height=70,
         key="rem2_message_sms_input",
     )
     m2_wa = st.text_area(
         "WhatsApp tekst (zelfde dag)",
         value=str(settings["rem2_message_whatsapp"] or ""),
-        placeholder="Bijvoorbeeld: Hi {klantnaam}, een korte reminder: uw afspraak begint om {tijd}.",
+        placeholder=(
+            "Hi {klantnaam}, een korte reminder: uw afspraak begint om {tijd}."
+        ),
         height=70,
         key="rem2_message_whatsapp_input",
     )
@@ -471,7 +543,7 @@ def render_reminders(cid: int):
         "E-mail tekst (zelfde dag)",
         value=str(settings["rem2_message_email"] or ""),
         placeholder=(
-            "Bijvoorbeeld: Beste {klantnaam},\n\n"
+            "Beste {klantnaam},\n\n"
             "Dit is een korte herinnering dat uw afspraak binnenkort start om {tijd}.\n\n"
             "Met vriendelijke groeten,\n{bedrijfsnaam}"
         ),
@@ -479,9 +551,7 @@ def render_reminders(cid: int):
         key="rem2_message_email_input",
     )
 
-    # =========================
-    # Opslaan
-    # =========================
+    # -------- Opslaan --------
     if st.button("Instellingen opslaan", type="primary", key="reminders_save_btn"):
         ok = upsert_reminder_settings(
             cid,
@@ -508,21 +578,96 @@ def render_reminders(cid: int):
             _error("Kon instellingen niet opslaan.")
 
     st.info(
-        "Alle tijden, kanalen en teksten worden hier per bedrijf opgeslagen. "
-        "De daadwerkelijke SMS/WhatsApp/E-mail verzending hangt af van de gekoppelde provider en bundels."
+        "Deze instellingen bepalen timing, kanalen en teksten. "
+        "WhatsApp/SMS worden alleen verzonden als er voldoende bundeltegoed is "
+        "en je externe provider correct is gekoppeld."
     )
 
-    
+
+def render_bundles_and_usage(cid: int):
+    st.markdown("## Bundels & verbruik")
+
+    usage = get_message_usage_summary(cid)
+    wc = usage.get("whatsapp_credits", 0)
+    sc = usage.get("sms_credits", 0)
+    el = usage.get("email_limit", 1000)
+    eu = usage.get("email_used", 0)
+
+    st.caption(
+        "Basis: D’or Basic bevat o.a. je boekingspagina, agenda en e-mailherinneringen "
+        f"(bijvoorbeeld tot {el} e-mails/maand). WhatsApp en SMS werken via bundels."
+    )
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("WhatsApp-tegoed", f"{wc} berichten")
+    col2.metric("SMS-tegoed", f"{sc} berichten")
+    col3.metric("E-mail gebruik", f"{eu} / {el}")
+
+    if wc <= 0:
+        st.warning(
+            "Geen WhatsApp-tegoed: WhatsApp-herinneringen zijn uitgeschakeld totdat je een bundel toevoegt."
+        )
+    elif wc < 50:
+        st.info("Je WhatsApp-tegoed is bijna op. Overweeg een nieuwe bundel.")
+
+    if sc <= 0:
+        st.caption("Geen actief SMS-tegoed (optioneel, premium kanaal).")
+    elif sc < 50:
+        st.info("Je SMS-tegoed is bijna op.")
+
+    st.markdown("### WhatsApp-bundels")
+    c1, c2, c3 = st.columns(3)
+    if c1.button("Koop WA bundel S (250)", key="buy_wa_250"):
+        add_whatsapp_credits(cid, 250)
+        _success("WhatsApp bundel S toegevoegd (+250).")
+        st.rerun()
+    if c2.button("Koop WA bundel M (500)", key="buy_wa_500"):
+        add_whatsapp_credits(cid, 500)
+        _success("WhatsApp bundel M toegevoegd (+500).")
+        st.rerun()
+    if c3.button("Koop WA bundel L (1000)", key="buy_wa_1000"):
+        add_whatsapp_credits(cid, 1000)
+        _success("WhatsApp bundel L toegevoegd (+1000).")
+        st.rerun()
+
+    st.markdown("### SMS-bundels")
+    s1, s2, s3 = st.columns(3)
+    if s1.button("Koop SMS bundel S (100)", key="buy_sms_100"):
+        add_sms_credits(cid, 100)
+        _success("SMS bundel S toegevoegd (+100).")
+        st.rerun()
+    if s2.button("Koop SMS bundel M (250)", key="buy_sms_250"):
+        add_sms_credits(cid, 250)
+        _success("SMS bundel M toegevoegd (+250).")
+        st.rerun()
+    if s3.button("Koop SMS bundel L (500)", key="buy_sms_500"):
+        add_sms_credits(cid, 500)
+        _success("SMS bundel L toegevoegd (+500).")
+        st.rerun()
+
+    st.markdown("### Extra e-mail limiet (optioneel)")
+    if st.button("Voeg 1000 extra e-mails toe", key="buy_email_extra"):
+        add_email_limit(cid, 1000)
+        _success("E-mail limiet verhoogd met 1000.")
+        st.rerun()
+
+    st.info(
+        "Deze bundelknoppen simuleren het toevoegen van tegoed. "
+        "In productie koppel je dit aan betalingen (Stripe/Mollie) "
+        "of activeer je bundels handmatig per klant."
+    )
+
+
 def render_account(cid: int):
     st.markdown("## Account & abonnement")
 
     paid = is_company_paid(cid)
     st.markdown(
-        f"Status abonnement: {'✅ Actief' if paid else '⏸️ Nog niet geactiveerd'}"
+        f"Status abonnement: {'✅ Actief' if paid else '⏸️ Nog niet geactiveerd (D’or Basic)'}"
     )
-    if not paid and st.button("Activeer abonnement"):
+    if not paid and st.button("Markeer als actief (admin)", key="activate_account_btn"):
         activate_company(cid)
-        _success("Account geactiveerd.")
+        _success("Account gemarkeerd als actief.")
         st.rerun()
 
     st.markdown("### Profiel")
@@ -533,7 +678,7 @@ def render_account(cid: int):
     new_email = col2.text_input("E-mail", value=cur["email"])
     new_pw = st.text_input("Nieuw wachtwoord (optioneel)", type="password")
 
-    if st.button("Profiel opslaan", type="primary"):
+    if st.button("Profiel opslaan", type="primary", key="save_profile_btn"):
         ok = update_company_profile(cid, new_name, new_email, new_pw or None)
         if ok:
             _success("Profiel opgeslagen.")
@@ -562,16 +707,25 @@ def render_account(cid: int):
     st.divider()
     if st.button("Uitloggen", key="logout_btn_bottom"):
         st.session_state.clear()
-        st.experimental_set_query_params()
+        _set_query_params()
         st.rerun()
 
 
-# ---------------- Routering ----------------
+# =============================
+# Routering
+# =============================
 if view_mode == "public":
     render_public_catalog(company_id)
 else:
     tabs = st.tabs(
-        ["Diensten", "Beschikbaarheid", "Boekingen", "Herinneringen", "Account"]
+        [
+            "Diensten",
+            "Beschikbaarheid",
+            "Boekingen",
+            "Herinneringen",
+            "Bundels & verbruik",
+            "Account",
+        ]
     )
     with tabs[0]:
         render_services(company_id)
@@ -582,4 +736,6 @@ else:
     with tabs[3]:
         render_reminders(company_id)
     with tabs[4]:
+        render_bundles_and_usage(company_id)
+    with tabs[5]:
         render_account(company_id)
