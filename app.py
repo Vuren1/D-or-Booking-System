@@ -210,6 +210,7 @@ if not company_id:
 company_name = get_company_name_by_id(company_id)
 company_logo = get_company_logo(company_id)
 company_slug = get_company_slug(company_id)
+BASE_DOMAIN = os.getenv("BASE_DOMAIN", "dor-booking.com")
 
 # =============================
 # Header branding
@@ -237,9 +238,12 @@ st.markdown(f"### Beheeromgeving voor **{company_name}**")
 
 if company_slug:
     st.caption(
-        "Jouw publieke boekingslink (deel met klanten): "
-        f"`?company={company_slug}&view=public`"
+        "Jouw publieke boekingslink (voorbeeld): "
+        f"`https://{company_slug}.{BASE_DOMAIN}`  "
+        "(of gebruik voorlopig: "
+        f"`?company={company_slug}&view=public` )"
     )
+
 
 # =============================
 # Sidebar navigatie
