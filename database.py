@@ -33,7 +33,7 @@ def init_db():
     conn = get_connection()
     c = conn.cursor()
 
-    # Companies
+    # ---------------- Companies ----------------
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS companies (
@@ -57,7 +57,7 @@ def init_db():
         except Exception:
             pass
 
-    # Generate slugs if missing
+    # Slugs invullen voor bestaande
     try:
         c.execute("SELECT id, name FROM companies WHERE slug IS NULL OR slug = ''")
         for row in c.fetchall():
@@ -75,7 +75,7 @@ def init_db():
     except Exception:
         pass
 
-    # Categories
+    # ---------------- Categories ----------------
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS categories (
@@ -89,7 +89,7 @@ def init_db():
         """
     )
 
-    # Services
+    # ---------------- Services ----------------
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS services (
@@ -106,7 +106,7 @@ def init_db():
         """
     )
 
-    # Availability
+    # ---------------- Availability ----------------
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS availability (
@@ -120,7 +120,7 @@ def init_db():
         """
     )
 
-    # Bookings
+    # ---------------- Bookings ----------------
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS bookings (
@@ -137,7 +137,6 @@ def init_db():
         """
     )
 
-    # Booking items
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS booking_items (
@@ -152,38 +151,67 @@ def init_db():
         """
     )
 
-    # Reminder settings (uitgebreid)
+    # ---------------- Reminder settings ----------------
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS reminder_settings (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_id   INTEGER NOT NULL,
-            offset_hours INTEGER NOT NULL DEFAULT 24,
-            active       INTEGER NOT NULL DEFAULT 0,
-            sms_active        INTEGER NOT NULL DEFAULT 0,
-            whatsapp_active   INTEGER NOT NULL DEFAULT 0,
-            email_active      INTEGER NOT NULL DEFAULT 0,
-            UNIQUE(company_id),
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id         INTEGER NOT NULL UNIQUE,
+            active             INTEGER NOT NULL DEFAULT 0,
+
+            rem1_days_before   INTEGER NOT NULL DEFAULT 1,
+            rem1_time          TEXT    NOT NULL DEFAULT '09:00',
+            rem1_sms           INTEGER NOT NULL DEFAULT 0,
+            rem1_whatsapp      INTEGER NOT NULL DEFAULT 0,
+            rem1_email         INTEGER NOT NULL DEFAULT 0,
+            rem1_message_sms        TEXT,
+            rem1_message_whatsapp   TEXT,
+            rem1_message_email      TEXT,
+
+            rem2_minutes_before INTEGER NOT NULL DEFAULT 60,
+            rem2_sms            INTEGER NOT NULL DEFAULT 0,
+            rem2_whatsapp       INTEGER NOT NULL DEFAULT 0,
+            rem2_email          INTEGER NOT NULL DEFAULT 0,
+            rem2_message_sms        TEXT,
+            rem2_message_whatsapp   TEXT,
+            rem2_message_email      TEXT,
+
             FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
         )
         """
     )
-    # migratie extra kolommen
-    for col in ["sms_active", "whatsapp_active", "email_active"]:
-        try:
-            c.execute(
-                f"ALTER TABLE reminder_settings ADD COLUMN {col} INTEGER NOT NULL DEFAULT 0"
-            )
-        except Exception:
-            pass
+
+    # Migrate extra kolommen indien oude tabel
+    columns = {row["name"] for row in c.execute("PRAGMA table_info(reminder_settings)")}
+    def add_col(name, ddl):
+        if name not in columns:
+            try:
+                c.execute(ddl)
+            except Exception:
+                pass
+
+    add_col("rem1_days_before",   "ALTER TABLE reminder_settings ADD COLUMN rem1_days_before INTEGER NOT NULL DEFAULT 1")
+    add_col("rem1_time",          "ALTER TABLE reminder_settings ADD COLUMN rem1_time TEXT NOT NULL DEFAULT '09:00'")
+    add_col("rem1_sms",           "ALTER TABLE reminder_settings ADD COLUMN rem1_sms INTEGER NOT NULL DEFAULT 0")
+    add_col("rem1_whatsapp",      "ALTER TABLE reminder_settings ADD COLUMN rem1_whatsapp INTEGER NOT NULL DEFAULT 0")
+    add_col("rem1_email",         "ALTER TABLE reminder_settings ADD COLUMN rem1_email INTEGER NOT NULL DEFAULT 0")
+    add_col("rem1_message_sms",   "ALTER TABLE reminder_settings ADD COLUMN rem1_message_sms TEXT")
+    add_col("rem1_message_whatsapp", "ALTER TABLE reminder_settings ADD COLUMN rem1_message_whatsapp TEXT")
+    add_col("rem1_message_email", "ALTER TABLE reminder_settings ADD COLUMN rem1_message_email TEXT")
+
+    add_col("rem2_minutes_before", "ALTER TABLE reminder_settings ADD COLUMN rem2_minutes_before INTEGER NOT NULL DEFAULT 60")
+    add_col("rem2_sms",            "ALTER TABLE reminder_settings ADD COLUMN rem2_sms INTEGER NOT NULL DEFAULT 0")
+    add_col("rem2_whatsapp",       "ALTER TABLE reminder_settings ADD COLUMN rem2_whatsapp INTEGER NOT NULL DEFAULT 0")
+    add_col("rem2_email",          "ALTER TABLE reminder_settings ADD COLUMN rem2_email INTEGER NOT NULL DEFAULT 0")
+    add_col("rem2_message_sms",    "ALTER TABLE reminder_settings ADD COLUMN rem2_message_sms TEXT")
+    add_col("rem2_message_whatsapp", "ALTER TABLE reminder_settings ADD COLUMN rem2_message_whatsapp TEXT")
+    add_col("rem2_message_email",  "ALTER TABLE reminder_settings ADD COLUMN rem2_message_email TEXT")
 
     conn.commit()
     conn.close()
 
 
-# -----------------------------
-# Companies
-# -----------------------------
+# =============== Companies ===============
 def add_company(name: str, email: str, password: str) -> int:
     conn = get_connection()
     try:
@@ -247,7 +275,7 @@ def get_company_slug(company_id: int) -> Optional[str]:
     c.execute("SELECT slug FROM companies WHERE id=?", (company_id,))
     row = c.fetchone()
     conn.close()
-    return row[0] if row and row[0] else None
+    return row["slug"] if row and row["slug"] else None
 
 
 def get_company_name_by_id(company_id: int) -> Optional[str]:
@@ -256,7 +284,7 @@ def get_company_name_by_id(company_id: int) -> Optional[str]:
     c.execute("SELECT name FROM companies WHERE id=?", (company_id,))
     row = c.fetchone()
     conn.close()
-    return row[0] if row else None
+    return row["name"] if row else None
 
 
 def set_company_logo(company_id: int, logo_path: str) -> bool:
@@ -278,7 +306,7 @@ def get_company_logo(company_id: int) -> Optional[str]:
     c.execute("SELECT logo_path FROM companies WHERE id=?", (company_id,))
     row = c.fetchone()
     conn.close()
-    return row[0] if row and row[0] else None
+    return row["logo_path"] if row and row["logo_path"] else None
 
 
 def is_company_paid(company_id: int) -> bool:
@@ -287,7 +315,7 @@ def is_company_paid(company_id: int) -> bool:
     c.execute("SELECT paid FROM companies WHERE id=?", (company_id,))
     row = c.fetchone()
     conn.close()
-    return bool(row and row[0])
+    return bool(row and row["paid"])
 
 
 def update_company_paid(company_id: int, paid: bool):
@@ -326,9 +354,7 @@ def update_company_profile(
         conn.close()
 
 
-# -----------------------------
-# Categories
-# -----------------------------
+# =============== Categories ===============
 def get_categories(company_id: int) -> pd.DataFrame:
     conn = get_connection()
     df = pd.read_sql_query(
@@ -354,7 +380,7 @@ def add_category(company_id: int, name: str, description: str = "") -> int:
             (company_id, name),
         )
         row = c.fetchone()
-        return int(row[0]) if row else -1
+        return int(row["id"]) if row else -1
     finally:
         conn.close()
 
@@ -363,9 +389,7 @@ def upsert_category(company_id: int, name: str, description: str = "") -> int:
     return add_category(company_id, name, description)
 
 
-# -----------------------------
-# Services
-# -----------------------------
+# =============== Services ===============
 def get_services(company_id: int) -> pd.DataFrame:
     conn = get_connection()
     df = pd.read_sql_query(
@@ -482,9 +506,7 @@ def get_public_services(company_id: int) -> pd.DataFrame:
     return df
 
 
-# -----------------------------
-# Availability
-# -----------------------------
+# =============== Availability ===============
 _DUTCH_DAYS = [
     "Maandag",
     "Dinsdag",
@@ -534,9 +556,7 @@ def get_availability(company_id: int) -> pd.DataFrame:
     return df
 
 
-# -----------------------------
-# Slots
-# -----------------------------
+# =============== Slots ===============
 def get_available_slots_for_duration(
     company_id: int, target_date: ddate, duration_minutes: int, step_minutes: int = 15
 ) -> List[str]:
@@ -585,9 +605,7 @@ def get_available_slots_for_duration(
     return slots
 
 
-# -----------------------------
-# Bookings
-# -----------------------------
+# =============== Bookings ===============
 def add_booking_with_items(
     company_id: int,
     customer: str,
@@ -666,8 +684,8 @@ def get_bookings_overview(company_id: int) -> pd.DataFrame:
     df = pd.read_sql_query(
         """
         SELECT date,
-               COUNT(*)           AS total_bookings,
-               SUM(total_price)   AS revenue
+               COUNT(*)         AS total_bookings,
+               SUM(total_price) AS revenue
         FROM bookings
         WHERE company_id=?
         GROUP BY date
@@ -680,15 +698,28 @@ def get_bookings_overview(company_id: int) -> pd.DataFrame:
     return df
 
 
-# -----------------------------
-# Reminders
-# -----------------------------
+# =============== Reminders ===============
 def get_reminder_settings(company_id: int) -> pd.DataFrame:
     conn = get_connection()
     df = pd.read_sql_query(
         """
-        SELECT offset_hours, active,
-               sms_active, whatsapp_active, email_active
+        SELECT
+            active,
+            rem1_days_before,
+            rem1_time,
+            rem1_sms,
+            rem1_whatsapp,
+            rem1_email,
+            rem1_message_sms,
+            rem1_message_whatsapp,
+            rem1_message_email,
+            rem2_minutes_before,
+            rem2_sms,
+            rem2_whatsapp,
+            rem2_email,
+            rem2_message_sms,
+            rem2_message_whatsapp,
+            rem2_message_email
         FROM reminder_settings
         WHERE company_id=?
         """,
@@ -700,31 +731,71 @@ def get_reminder_settings(company_id: int) -> pd.DataFrame:
     if df.empty:
         df = pd.DataFrame(
             [
-                {
-                    "offset_hours": 24,
-                    "active": 0,
-                    "sms_active": 0,
-                    "whatsapp_active": 0,
-                    "email_active": 0,
-                }
+                dict(
+                    active=0,
+                    rem1_days_before=1,
+                    rem1_time="09:00",
+                    rem1_sms=0,
+                    rem1_whatsapp=0,
+                    rem1_email=0,
+                    rem1_message_sms="Beste {klantnaam}, dit is een herinnering voor uw afspraak op {datum} om {tijd}.",
+                    rem1_message_whatsapp="Beste {klantnaam}, we zien u graag op {datum} om {tijd}.",
+                    rem1_message_email="Beste {klantnaam},\\n\\nDit is een herinnering voor uw afspraak op {datum} om {tijd}.\\n\\nMet vriendelijke groeten,\\n{bedrijfsnaam}",
+                    rem2_minutes_before=60,
+                    rem2_sms=0,
+                    rem2_whatsapp=0,
+                    rem2_email=0,
+                    rem2_message_sms="Beste {klantnaam}, uw afspraak start om {tijd}. Tot zo!",
+                    rem2_message_whatsapp="Hi {klantnaam}, een korte herinnering: uw afspraak begint om {tijd}.",
+                    rem2_message_email="Beste {klantnaam},\\n\\nEen korte herinnering dat uw afspraak binnenkort start om {tijd}.\\n\\nMet vriendelijke groeten,\\n{bedrijfsnaam}",
+                )
             ]
         )
 
-    # Zorg dat kolommen altijd bestaan
-    for col in ["sms_active", "whatsapp_active", "email_active"]:
+    defaults = {
+        "active": 0,
+        "rem1_days_before": 1,
+        "rem1_time": "09:00",
+        "rem1_sms": 0,
+        "rem1_whatsapp": 0,
+        "rem1_email": 0,
+        "rem1_message_sms": "",
+        "rem1_message_whatsapp": "",
+        "rem1_message_email": "",
+        "rem2_minutes_before": 60,
+        "rem2_sms": 0,
+        "rem2_whatsapp": 0,
+        "rem2_email": 0,
+        "rem2_message_sms": "",
+        "rem2_message_whatsapp": "",
+        "rem2_message_email": "",
+    }
+    for col, val in defaults.items():
         if col not in df.columns:
-            df[col] = 0
+            df[col] = val
+        df[col] = df[col].fillna(val)
 
-    return df
+    return df.iloc[[0]]  # altijd één rij
 
 
 def upsert_reminder_settings(
     company_id: int,
-    offset_hours: int,
     active: bool,
-    sms_active: bool,
-    whatsapp_active: bool,
-    email_active: bool,
+    rem1_days_before: int,
+    rem1_time: str,
+    rem1_sms: bool,
+    rem1_whatsapp: bool,
+    rem1_email: bool,
+    rem1_message_sms: str,
+    rem1_message_whatsapp: str,
+    rem1_message_email: str,
+    rem2_minutes_before: int,
+    rem2_sms: bool,
+    rem2_whatsapp: bool,
+    rem2_email: bool,
+    rem2_message_sms: str,
+    rem2_message_whatsapp: str,
+    rem2_message_email: str,
 ) -> bool:
     conn = get_connection()
     try:
@@ -732,24 +803,61 @@ def upsert_reminder_settings(
         c.execute(
             """
             INSERT INTO reminder_settings (
-                company_id, offset_hours, active,
-                sms_active, whatsapp_active, email_active
+                company_id,
+                active,
+                rem1_days_before,
+                rem1_time,
+                rem1_sms,
+                rem1_whatsapp,
+                rem1_email,
+                rem1_message_sms,
+                rem1_message_whatsapp,
+                rem1_message_email,
+                rem2_minutes_before,
+                rem2_sms,
+                rem2_whatsapp,
+                rem2_email,
+                rem2_message_sms,
+                rem2_message_whatsapp,
+                rem2_message_email
             )
-            VALUES (?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(company_id) DO UPDATE SET
-                offset_hours   = excluded.offset_hours,
-                active         = excluded.active,
-                sms_active     = excluded.sms_active,
-                whatsapp_active= excluded.whatsapp_active,
-                email_active   = excluded.email_active
+                active               = excluded.active,
+                rem1_days_before     = excluded.rem1_days_before,
+                rem1_time            = excluded.rem1_time,
+                rem1_sms             = excluded.rem1_sms,
+                rem1_whatsapp        = excluded.rem1_whatsapp,
+                rem1_email           = excluded.rem1_email,
+                rem1_message_sms     = excluded.rem1_message_sms,
+                rem1_message_whatsapp= excluded.rem1_message_whatsapp,
+                rem1_message_email   = excluded.rem1_message_email,
+                rem2_minutes_before  = excluded.rem2_minutes_before,
+                rem2_sms             = excluded.rem2_sms,
+                rem2_whatsapp        = excluded.rem2_whatsapp,
+                rem2_email           = excluded.rem2_email,
+                rem2_message_sms     = excluded.rem2_message_sms,
+                rem2_message_whatsapp= excluded.rem2_message_whatsapp,
+                rem2_message_email   = excluded.rem2_message_email
             """,
             (
                 company_id,
-                int(offset_hours),
                 1 if active else 0,
-                1 if sms_active else 0,
-                1 if whatsapp_active else 0,
-                1 if email_active else 0,
+                int(rem1_days_before),
+                rem1_time,
+                1 if rem1_sms else 0,
+                1 if rem1_whatsapp else 0,
+                1 if rem1_email else 0,
+                rem1_message_sms,
+                rem1_message_whatsapp,
+                rem1_message_email,
+                int(rem2_minutes_before),
+                1 if rem2_sms else 0,
+                1 if rem2_whatsapp else 0,
+                1 if rem2_email else 0,
+                rem2_message_sms,
+                rem2_message_whatsapp,
+                rem2_message_email,
             ),
         )
         conn.commit()
