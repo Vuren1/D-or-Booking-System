@@ -725,125 +725,204 @@ def render_ai(company_id: int):
         "op basis van jouw diensten en beschikbaarheid."
     )
 
+    # Huidige instellingen ophalen (veilig met defaults)
     settings = get_company_ai_settings(company_id) or {}
 
-    enabled = bool(settings.get("enabled") or settings.get("ai_assistant_enabled", 0))
+    enabled = bool(
+        settings.get("enabled")
+        or settings.get("ai_assistant_enabled", 0)
+    )
+    line_type = settings.get("ai_line_type") or "standard"  # 'standard' of 'premium'
     phone_number = (
         settings.get("phone_number")
         or settings.get("ai_phone_number")
         or ""
     )
-    line_type = settings.get("ai_line_type") or "standard"
+
     guard_max_minutes = int(settings.get("ai_guard_max_minutes", 8) or 8)
     guard_idle_seconds = int(settings.get("ai_guard_idle_seconds", 25) or 25)
-    guard_hangup_after_booking = bool(int(settings.get("ai_guard_hangup_after_booking", 1) or 1))
-    tariff_announce = bool(int(settings.get("ai_tariff_announce", 1) or 1))
+    guard_hangup_after_booking = bool(
+        int(settings.get("ai_guard_hangup_after_booking", 1) or 1)
+    )
+    tariff_announce = bool(
+        int(settings.get("ai_tariff_announce", 1) or 1)
+    )
 
     ai_minutes = get_ai_local_minutes_balance(company_id)
     premium_rate_cents = int(PREMIUM_AI_0900_RATE_EUR * 100)
 
-    top_left, top_right = st.columns([2, 1])
-    with top_left:
-        enabled_new = st.checkbox(
-            "AI-telefoniste inschakelen",
-            value=enabled,
-            help="Als dit aanstaat, worden oproepen naar dit nummer door de AI afgehandeld.",
-            key="ai_enabled",
-        )
-        phone_new = st.text_input(
-            "AI-telefoonnummer (virtueel/lokaal/0900)",
-            value=phone_number,
-            placeholder="+31..., +32..., 0900...",
-            help="Bijvoorbeeld een virtueel nummer of 0900-nummer van je telco.",
-            key="ai_phone",
-        )
-    with top_right:
-        st.metric("Beschikbare AI-belminuten", f"{ai_minutes} min")
-        st.caption("AI-minuten kun je aanvullen via **Bundels & verbruik**.")
-
-    st.markdown("### Lijntype & tarieven")
-
-    lt1, lt2 = st.columns([2, 3])
-    with lt1:
-        line_type_new = st.radio(
-            "Type lijn",
-            options=["standard", "premium"],
-            index=0 if line_type == "standard" else 1,
-            format_func=lambda v: (
-                "Standaard (beller betaalt normaal tarief)"
-                if v == "standard"
-                else "0900 / premium lijn"
-            ),
-            key="ai_line_type",
-        )
-
-    with lt2:
-        if line_type_new == "standard":
-            st.write(
-                "De beller betaalt enkel zijn normale belkosten. "
-                "Jij verbruikt AI-minuten uit je bundel."
-            )
-            premium_rate_to_store = None
-        else:
-            st.write(
-                f"0900-lijn actief. Vast tarief: **{_format_money(PREMIUM_AI_0900_RATE_EUR)} per minuut** "
-                "voor de beller. Dit tarief is standaard voor alle bedrijven."
-            )
-            premium_rate_to_store = premium_rate_cents
-
-    st.markdown("### Veiligheidslimieten")
-
-    g1, g2 = st.columns(2)
-    with g1:
-        max_minutes_new = st.slider(
-            "Max. gespreksduur (minuten)",
-            min_value=1,
-            max_value=30,
-            value=guard_max_minutes,
-            help="Na deze tijd verbreekt de AI automatisch het gesprek.",
-            key="ai_guard_max_minutes",
-        )
-    with g2:
-        idle_seconds_new = st.slider(
-            "Max. stilte (seconden)",
-            min_value=5,
-            max_value=120,
-            value=guard_idle_seconds,
-            help="Bij langere stilte verbreekt de AI het gesprek.",
-            key="ai_guard_idle_seconds",
-        )
-
-    c1, c2 = st.columns(2)
-    with c1:
-        hangup_new = st.checkbox(
-            "Ophangen na succesvolle booking",
-            value=guard_hangup_after_booking,
-            key="ai_guard_hangup",
-        )
-    with c2:
-        tariff_new = st.checkbox(
-            "Tarief aankondigen bij start",
-            value=tariff_announce,
-            key="ai_tariff_announce",
-        )
-
-    extra_min = st.number_input(
-        "Handmatig minuten toevoegen (alleen admin/debug)",
-        min_value=0,
-        max_value=10000,
-        step=50,
-        key="ai_add_minutes",
+    # 1. Globale schakelaar
+    enabled_new = st.checkbox(
+        "AI-telefoniste inschakelen",
+        value=enabled,
+        help="Als dit uit staat, neemt de AI nooit op, ongeacht de instellingen hieronder.",
+        key="ai_enabled",
     )
 
+    # 2. Kies tussen 0900 of lokaal nummer
+    mode_labels = {
+        "0900": "0900-nummer (beller betaalt, AI inbegrepen)",
+        "local": "Lokaal nummer (AI uit je minutenbundel)",
+    }
+    selected_mode = st.radio(
+        "Kies hoe jouw AI-telefoniste bereikbaar is",
+        options=["0900", "local"],
+        index=0 if line_type == "premium" else 1,
+        format_func=lambda v: mode_labels[v],
+        horizontal=True,
+        key="ai_mode_choice",
+    )
+    use_premium = selected_mode == "0900"
+
+    col_0900, col_local = st.columns(2)
+
+    # ==================================
+    # OPTIE 1: 0900 / PREMIUM LIJN
+    # ==================================
+    with col_0900:
+        st.markdown("### Optie 1: 0900-nummer")
+
+        if use_premium:
+            st.success("Deze optie is momenteel actief.")
+        else:
+            st.caption(
+                "Niet actief. Kies hierboven '0900-nummer (beller betaalt, AI inbegrepen)' "
+                "om deze optie te activeren."
+            )
+
+        number_0900 = st.text_input(
+            "Jouw 0900-nummer om te delen met klanten",
+            value=phone_number if use_premium else "",
+            placeholder="0900-....",
+            help="Dit nummer communiceer je met je klanten. Oproepen hierop gaan naar de AI.",
+            key="ai_0900_number",
+        )
+
+        st.write(
+            f"- Vast tarief voor de beller: **{_format_money(PREMIUM_AI_0900_RATE_EUR)} per minuut**."
+        )
+        st.write("- Dit tarief is standaard voor alle bedrijven en niet aanpasbaar.")
+        st.write("- De kosten van de AI worden hiermee gedekt; jij hoeft geen AI-minutenbundels te kopen.")
+        st.write("- Ideaal als je de kosten wilt doorbelasten aan de klant.")
+
+    # ==================================
+    # OPTIE 2: LOKAAL NUMMER + BUNDELS
+    # ==================================
+    with col_local:
+        st.markdown("### Optie 2: Lokaal nummer")
+
+        if not use_premium:
+            st.success("Deze optie is momenteel actief.")
+        else:
+            st.caption(
+                "Niet actief. Kies hierboven 'Lokaal nummer (AI uit je minutenbundel)' "
+                "om deze optie te activeren."
+            )
+
+        local_number = st.text_input(
+            "Jouw lokale AI-nummer",
+            value=phone_number if not use_premium else "",
+            placeholder="+31..., +32...",
+            help="Bijvoorbeeld een regionaal nummer dat je via je provider naar de AI doorschakelt.",
+            key="ai_local_number",
+        )
+
+        st.metric("Beschikbare AI-belminuten", f"{ai_minutes} min")
+        st.caption(
+            "Oproepen naar dit nummer verbruiken AI-minuten uit je bundel. "
+            "Is je bundel leeg, dan neemt de AI niet meer op tot je aanvult."
+        )
+
+        st.markdown("**AI-minuten bundels (demo)**")
+        b1, b2, b3 = st.columns(3)
+        with b1:
+            st.write("€25 · 250 min")
+            if st.button("Koop 250 min", key="ai_bundle_250"):
+                add_ai_local_minutes(company_id, 250)
+                _success("250 AI-minuten toegevoegd (demo).")
+                st.rerun()
+        with b2:
+            st.write("€45 · 500 min")
+            if st.button("Koop 500 min", key="ai_bundle_500"):
+                add_ai_local_minutes(company_id, 500)
+                _success("500 AI-minuten toegevoegd (demo).")
+                st.rerun()
+        with b3:
+            st.write("€80 · 1.000 min")
+            if st.button("Koop 1.000 min", key="ai_bundle_1000"):
+                add_ai_local_minutes(company_id, 1000)
+                _success("1.000 AI-minuten toegevoegd (demo).")
+                st.rerun()
+
+    # ==================================
+    # SAFEGUARDS (GELDEN VOOR JE AI)
+    # ==================================
+    st.markdown("### Veiligheidslimieten (Safeguards)")
+
+    sg1, sg2 = st.columns(2)
+    max_minutes_new = sg1.slider(
+        "Max. gespreksduur (minuten)",
+        min_value=1,
+        max_value=30,
+        value=guard_max_minutes,
+        help="Na deze tijd verbreekt de AI automatisch het gesprek. Voorkomt misbruik & onverwachte kosten.",
+        key="ai_guard_max_minutes",
+    )
+    idle_seconds_new = sg2.slider(
+        "Max. stilte (seconden)",
+        min_value=5,
+        max_value=120,
+        value=guard_idle_seconds,
+        help="Bij langere stilte verbreekt de AI het gesprek automatisch.",
+        key="ai_guard_idle_seconds",
+    )
+
+    cb1, cb2 = st.columns(2)
+    hangup_new = cb1.checkbox(
+        "Ophangen na succesvolle booking",
+        value=guard_hangup_after_booking,
+        key="ai_guard_hangup",
+    )
+    tariff_new = cb2.checkbox(
+        "Tarief aankondigen bij start",
+        value=tariff_announce,
+        key="ai_tariff_announce",
+    )
+
+    st.caption(
+        "Deze safeguards zijn er om jij en je klant te beschermen tegen eindeloze gesprekken, "
+        "fouten of misbruik."
+    )
+
+    # Alleen relevant bij lokaal nummer: extra minuten handmatig toevoegen (admin/debug)
+    extra_min = 0
+    if not use_premium:
+        extra_min = st.number_input(
+            "Handmatig minuten toevoegen (alleen admin/debug)",
+            min_value=0,
+            max_value=10000,
+            step=50,
+            key="ai_add_minutes",
+        )
+
+    # ==================================
+    # OPSLAAN
+    # ==================================
     if st.button("AI-instellingen opslaan", type="primary", key="ai_save_btn"):
         try:
+            # Bepaal welke mode actief wordt
+            line_type_new = "premium" if use_premium else "standard"
+            phone_to_save = (number_0900 if use_premium else local_number) or None
+
             set_company_ai_enabled(company_id, enabled_new)
-            set_company_ai_phone_number(company_id, phone_new or None)
+            set_company_ai_phone_number(company_id, phone_to_save)
+
             update_company_ai_line(
                 company_id,
                 line_type=line_type_new,
-                premium_rate_cents=premium_rate_to_store,
+                premium_rate_cents=premium_rate_cents if use_premium else None,
             )
+
             update_company_ai_safeguards(
                 company_id,
                 max_minutes=int(max_minutes_new),
@@ -851,167 +930,21 @@ def render_ai(company_id: int):
                 hangup_after_booking=bool(hangup_new),
                 tariff_announce=bool(tariff_new),
             )
-            if extra_min > 0:
+
+            if not use_premium and extra_min > 0:
                 add_ai_local_minutes(company_id, int(extra_min))
 
             _success("AI-instellingen opgeslagen.")
             st.rerun()
+
         except Exception as e:
             _error(f"Opslaan mislukt: {e}")
 
     st.info(
-        "Hier beheer je je AI-telefoniste. "
-        "In productie koppel je hier je VoIP-provider/0900-nummer en billing aan."
+        "Optie 1 (0900): beller betaalt een vast tarief per minuut, jij hoeft geen AI-minuten te beheren.\n"
+        "Optie 2 (lokaal nummer): gesprekken verbruiken minuten uit je bundel. "
+        "Je behoudt volledige controle via safeguards en bundels."
     )
-
-    def _parse_time_str(value: str) -> dtime:
-        try:
-            h, m = str(value).split(":")
-            return dtime(int(h), int(m))
-        except Exception:
-            return dtime(9, 0)
-
-    rem1_time = col2.time_input(
-        "Verzendtijd",
-        value=_parse_time_str(settings.get("rem1_time", "09:00")),
-        key="rem1_time_input",
-    )
-
-    ch1_col1, ch1_col2, ch1_col3 = st.columns(3)
-    rem1_sms = ch1_col1.checkbox(
-        "SMS",
-        value=bool(settings["rem1_sms"]),
-        key="rem1_sms_checkbox",
-    )
-    rem1_whatsapp = ch1_col2.checkbox(
-        "WhatsApp",
-        value=bool(settings["rem1_whatsapp"]),
-        key="rem1_whatsapp_checkbox",
-    )
-    rem1_email = ch1_col3.checkbox(
-        "E-mail",
-        value=bool(settings["rem1_email"]),
-        key="rem1_email_checkbox",
-    )
-
-    st.markdown("**Berichtteksten Herinnering 1**")
-    m1_sms = st.text_area(
-        "SMS tekst",
-        value=str(settings.get("rem1_message_sms") or ""),
-        placeholder="Beste {klantnaam}, dit is een herinnering voor uw afspraak op {datum} om {tijd}.",
-        height=70,
-        key="rem1_message_sms_input",
-    )
-    m1_wa = st.text_area(
-        "WhatsApp tekst",
-        value=str(settings.get("rem1_message_whatsapp") or ""),
-        placeholder="Beste {klantnaam}, we zien u graag op {datum} om {tijd}.",
-        height=70,
-        key="rem1_message_whatsapp_input",
-    )
-    m1_email = st.text_area(
-        "E-mail tekst",
-        value=str(settings.get("rem1_message_email") or ""),
-        placeholder=(
-            "Beste {klantnaam},\n\n"
-            "Dit is een herinnering voor uw afspraak op {datum} om {tijd}.\n\n"
-            "Met vriendelijke groeten,\n{bedrijfsnaam}"
-        ),
-        height=110,
-        key="rem1_message_email_input",
-    )
-
-    # Herinnering 2
-    st.markdown("---")
-    st.markdown("### Herinnering 2 – minuten vóór de afspraak (zelfde dag)")
-
-    col3, _ = st.columns(2)
-    rem2_minutes_before = col3.number_input(
-        "Aantal minuten vóór afspraak",
-        min_value=0,
-        max_value=1440,
-        value=int(settings["rem2_minutes_before"]),
-        key="rem2_minutes_before_input",
-    )
-
-    ch2_col1, ch2_col2, ch2_col3 = st.columns(3)
-    rem2_sms = ch2_col1.checkbox(
-        "SMS",
-        value=bool(settings["rem2_sms"]),
-        key="rem2_sms_checkbox",
-    )
-    rem2_whatsapp = ch2_col2.checkbox(
-        "WhatsApp",
-        value=bool(settings["rem2_whatsapp"]),
-        key="rem2_whatsapp_checkbox",
-    )
-    rem2_email = ch2_col3.checkbox(
-        "E-mail",
-        value=bool(settings["rem2_email"]),
-        key="rem2_email_checkbox",
-    )
-
-    st.markdown("**Berichtteksten Herinnering 2**")
-    m2_sms = st.text_area(
-        "SMS tekst (zelfde dag)",
-        value=str(settings.get("rem2_message_sms") or ""),
-        placeholder="Beste {klantnaam}, uw afspraak start om {tijd}. Tot zo!",
-        height=70,
-        key="rem2_message_sms_input",
-    )
-    m2_wa = st.text_area(
-        "WhatsApp tekst (zelfde dag)",
-        value=str(settings.get("rem2_message_whatsapp") or ""),
-        placeholder="Hi {klantnaam}, een korte reminder: uw afspraak begint om {tijd}.",
-        height=70,
-        key="rem2_message_whatsapp_input",
-    )
-    m2_email = st.text_area(
-        "E-mail tekst (zelfde dag)",
-        value=str(settings.get("rem2_message_email") or ""),
-        placeholder=(
-            "Beste {klantnaam},\n\n"
-            "Dit is een korte herinnering dat uw afspraak binnenkort start om {tijd}.\n\n"
-            "Met vriendelijke groeten,\n{bedrijfsnaam}"
-        ),
-        height=110,
-        key="rem2_message_email_input",
-    )
-
-    if st.button("Instellingen opslaan", type="primary", key="reminders_save_btn"):
-        ok = upsert_reminder_settings(
-            cid,
-            global_active,
-            int(rem1_days_before),
-            rem1_time.strftime("%H:%M"),
-            rem1_sms,
-            rem1_whatsapp,
-            rem1_email,
-            m1_sms,
-            m1_wa,
-            m1_email,
-            int(rem2_minutes_before),
-            rem2_sms,
-            rem2_whatsapp,
-            rem2_email,
-            m2_sms,
-            m2_wa,
-            m2_email,
-        )
-        if ok:
-            _success("Herinneringsinstellingen opgeslagen.")
-        else:
-            _error("Kon instellingen niet opslaan.")
-
-    st.info(
-        "Deze instellingen bepalen timing, kanalen en teksten. "
-        "WhatsApp/SMS worden alleen verzonden als er voldoende bundeltegoed is "
-        "en je externe provider correct is gekoppeld."
-    )
-    
-# als je ai_assistant.py al hebt:
-# from ai_assistant import provision_ai_number_for_company, release_ai_number_for_company
-
 
 def render_account(cid: int):
     st.markdown("## Account & abonnement")
