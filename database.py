@@ -414,12 +414,25 @@ def get_company_logo(company_id: int) -> Optional[str]:
     conn.close()
     return row["logo_path"] if row and row["logo_path"] else None
 
+
+# =============================
+# AI ASSISTANT SETTINGS
+# =============================
+
 def get_company_ai_settings(company_id: int) -> dict:
     conn = get_connection()
     c = conn.cursor()
     c.execute(
         """
-        SELECT ai_assistant_enabled, ai_phone_number
+        SELECT
+            ai_assistant_enabled,
+            ai_phone_number,
+            ai_line_type,
+            ai_premium_rate_cents,
+            ai_guard_max_minutes,
+            ai_guard_idle_seconds,
+            ai_guard_hangup_after_booking,
+            ai_tariff_announce
         FROM companies
         WHERE id = ?
         """,
@@ -428,42 +441,132 @@ def get_company_ai_settings(company_id: int) -> dict:
     row = c.fetchone()
     conn.close()
 
-    if not row:
-        return {"enabled": False, "phone_number": None}
-
-    return {
-        "enabled": bool(row["ai_assistant_enabled"]),
-        "phone_number": row["ai_phone_number"],
+    # Default waarden
+    defaults = {
+        "enabled": False,
+        "phone_number": None,
+        "ai_line_type": "standard",
+        "ai_premium_rate_cents": 10,   # = €0,10
+        "ai_guard_max_minutes": 8,
+        "ai_guard_idle_seconds": 25,
+        "ai_guard_hangup_after_booking": 1,
+        "ai_tariff_announce": 1,
     }
 
+    if not row:
+        return defaults
 
-def set_company_ai_enabled(company_id: int, enabled: bool):
+    d = defaults.copy()
+
+    # row is sqlite3.Row -> veilig key-checks
+    if "ai_assistant_enabled" in row.keys() and row["ai_assistant_enabled"] is not None:
+        d["enabled"] = bool(row["ai_assistant_enabled"])
+
+    if "ai_phone_number" in row.keys():
+        d["phone_number"] = row["ai_phone_number"]
+
+    if "ai_line_type" in row.keys() and row["ai_line_type"]:
+        d["ai_line_type"] = row["ai_line_type"]
+
+    if "ai_premium_rate_cents" in row.keys() and row["ai_premium_rate_cents"] is not None:
+        d["ai_premium_rate_cents"] = int(row["ai_premium_rate_cents"])
+
+    if "ai_guard_max_minutes" in row.keys() and row["ai_guard_max_minutes"] is not None:
+        d["ai_guard_max_minutes"] = int(row["ai_guard_max_minutes"])
+
+    if "ai_guard_idle_seconds" in row.keys() and row["ai_guard_idle_seconds"] is not None:
+        d["ai_guard_idle_seconds"] = int(row["ai_guard_idle_seconds"])
+
+    if "ai_guard_hangup_after_booking" in row.keys() and row["ai_guard_hangup_after_booking"] is not None:
+        d["ai_guard_hangup_after_booking"] = int(row["ai_guard_hangup_after_booking"])
+
+    if "ai_tariff_announce" in row.keys() and row["ai_tariff_announce"] is not None:
+        d["ai_tariff_announce"] = int(row["ai_tariff_announce"])
+
+    return d
+
+
+def set_company_ai_enabled(company_id: int, enabled: bool) -> None:
     conn = get_connection()
     c = conn.cursor()
     c.execute(
-        """
-        UPDATE companies
-        SET ai_assistant_enabled = ?
-        WHERE id = ?
-        """,
+        "UPDATE companies SET ai_assistant_enabled = ? WHERE id = ?",
         (1 if enabled else 0, company_id),
     )
     conn.commit()
     conn.close()
 
-def set_company_ai_phone_number(company_id: int, phone_number: str | None):
+
+def set_company_ai_phone_number(company_id: int, phone_number: str | None) -> None:
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        "UPDATE companies SET ai_phone_number = ? WHERE id = ?",
+        (phone_number, company_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_company_ai_line(
+    company_id: int,
+    line_type: str,
+    premium_rate_cents: int | None = None,
+) -> None:
+    """
+    line_type: 'standard' of 'premium'
+    premium_rate_cents: tarief in cent per minuut (alleen bij premium)
+    """
+    if line_type not in ("standard", "premium"):
+        line_type = "standard"
+
     conn = get_connection()
     c = conn.cursor()
     c.execute(
         """
         UPDATE companies
-        SET ai_phone_number = ?
+        SET ai_line_type = ?, ai_premium_rate_cents = ?
         WHERE id = ?
         """,
-        (phone_number, company_id),
+        (line_type, premium_rate_cents, company_id),
     )
     conn.commit()
     conn.close()
+
+
+def update_company_ai_safeguards(
+    company_id: int,
+    max_minutes: int | None,
+    idle_seconds: int | None,
+    hangup_after_booking: bool,
+    tariff_announce: bool,
+) -> None:
+    """
+    Slaat limieten op voor AI-gesprekken.
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        """
+        UPDATE companies
+        SET
+            ai_guard_max_minutes = ?,
+            ai_guard_idle_seconds = ?,
+            ai_guard_hangup_after_booking = ?,
+            ai_tariff_announce = ?
+        WHERE id = ?
+        """,
+        (
+            int(max_minutes) if max_minutes is not None else None,
+            int(idle_seconds) if idle_seconds is not None else None,
+            1 if hangup_after_booking else 0,
+            1 if tariff_announce else 0,
+            company_id,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
 
 def is_company_paid(company_id: int) -> bool:
     conn = get_connection()
