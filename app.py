@@ -410,7 +410,198 @@ def render_bookings(cid: int):
         else:
             st.dataframe(cust, use_container_width=True)
 
+def render_reminders(cid: int):
+    st.markdown("## Herinneringen & meldingen")
 
+    # Huidige instellingen ophalen
+    settings_df = get_reminder_settings(cid)
+    if settings_df is None or settings_df.empty:
+        # Fallback defaults
+        settings = {
+            "active": 1,
+            "rem1_days_before": 1,
+            "rem1_time": "09:00",
+            "rem1_sms": 0,
+            "rem1_whatsapp": 1,
+            "rem1_email": 1,
+            "rem1_message_sms": "",
+            "rem1_message_whatsapp": "",
+            "rem1_message_email": "",
+            "rem2_minutes_before": 60,
+            "rem2_sms": 0,
+            "rem2_whatsapp": 0,
+            "rem2_email": 1,
+            "rem2_message_sms": "",
+            "rem2_message_whatsapp": "",
+            "rem2_message_email": "",
+        }
+    else:
+        settings = settings_df.iloc[0]
+
+    # Globale schakelaar
+    global_active = st.checkbox(
+        "Herinneringen inschakelen",
+        value=bool(settings["active"]),
+        key="rem_global_active",
+    )
+
+    st.markdown("---")
+    st.markdown("### Herinnering 1 – dagen vóór de afspraak")
+
+    col1, col2 = st.columns(2)
+    rem1_days_before = col1.number_input(
+        "Aantal dagen vóór afspraak",
+        min_value=0,
+        max_value=365,
+        value=int(settings["rem1_days_before"]),
+        key="rem1_days_before_input",
+    )
+
+    def _parse_time_str(value: str) -> dtime:
+        try:
+            h, m = str(value).split(":")
+            return dtime(int(h), int(m))
+        except Exception:
+            return dtime(9, 0)
+
+    rem1_time = col2.time_input(
+        "Verzendtijd",
+        value=_parse_time_str(settings.get("rem1_time", "09:00")),
+        key="rem1_time_input",
+    )
+
+    ch1_col1, ch1_col2, ch1_col3 = st.columns(3)
+    rem1_sms = ch1_col1.checkbox(
+        "SMS",
+        value=bool(settings["rem1_sms"]),
+        key="rem1_sms_checkbox",
+    )
+    rem1_whatsapp = ch1_col2.checkbox(
+        "WhatsApp",
+        value=bool(settings["rem1_whatsapp"]),
+        key="rem1_whatsapp_checkbox",
+    )
+    rem1_email = ch1_col3.checkbox(
+        "E-mail",
+        value=bool(settings["rem1_email"]),
+        key="rem1_email_checkbox",
+    )
+
+    st.markdown("**Berichtteksten Herinnering 1**")
+    m1_sms = st.text_area(
+        "SMS tekst",
+        value=str(settings.get("rem1_message_sms") or ""),
+        placeholder="Beste {klantnaam}, dit is een herinnering voor uw afspraak op {datum} om {tijd}.",
+        height=70,
+        key="rem1_message_sms_input",
+    )
+    m1_wa = st.text_area(
+        "WhatsApp tekst",
+        value=str(settings.get("rem1_message_whatsapp") or ""),
+        placeholder="Beste {klantnaam}, we zien u graag op {datum} om {tijd}.",
+        height=70,
+        key="rem1_message_whatsapp_input",
+    )
+    m1_email = st.text_area(
+        "E-mail tekst",
+        value=str(settings.get("rem1_message_email") or ""),
+        placeholder=(
+            "Beste {klantnaam},\n\n"
+            "Dit is een herinnering voor uw afspraak op {datum} om {tijd}.\n\n"
+            "Met vriendelijke groeten,\n{bedrijfsnaam}"
+        ),
+        height=110,
+        key="rem1_message_email_input",
+    )
+
+    # Herinnering 2
+    st.markdown("---")
+    st.markdown("### Herinnering 2 – minuten vóór de afspraak (zelfde dag)")
+
+    col3, _ = st.columns(2)
+    rem2_minutes_before = col3.number_input(
+        "Aantal minuten vóór afspraak",
+        min_value=0,
+        max_value=1440,
+        value=int(settings["rem2_minutes_before"]),
+        key="rem2_minutes_before_input",
+    )
+
+    ch2_col1, ch2_col2, ch2_col3 = st.columns(3)
+    rem2_sms = ch2_col1.checkbox(
+        "SMS",
+        value=bool(settings["rem2_sms"]),
+        key="rem2_sms_checkbox",
+    )
+    rem2_whatsapp = ch2_col2.checkbox(
+        "WhatsApp",
+        value=bool(settings["rem2_whatsapp"]),
+        key="rem2_whatsapp_checkbox",
+    )
+    rem2_email = ch2_col3.checkbox(
+        "E-mail",
+        value=bool(settings["rem2_email"]),
+        key="rem2_email_checkbox",
+    )
+
+    st.markdown("**Berichtteksten Herinnering 2**")
+    m2_sms = st.text_area(
+        "SMS tekst (zelfde dag)",
+        value=str(settings.get("rem2_message_sms") or ""),
+        placeholder="Beste {klantnaam}, uw afspraak start om {tijd}. Tot zo!",
+        height=70,
+        key="rem2_message_sms_input",
+    )
+    m2_wa = st.text_area(
+        "WhatsApp tekst (zelfde dag)",
+        value=str(settings.get("rem2_message_whatsapp") or ""),
+        placeholder="Hi {klantnaam}, een korte reminder: uw afspraak begint om {tijd}.",
+        height=70,
+        key="rem2_message_whatsapp_input",
+    )
+    m2_email = st.text_area(
+        "E-mail tekst (zelfde dag)",
+        value=str(settings.get("rem2_message_email") or ""),
+        placeholder=(
+            "Beste {klantnaam},\n\n"
+            "Dit is een korte herinnering dat uw afspraak binnenkort start om {tijd}.\n\n"
+            "Met vriendelijke groeten,\n{bedrijfsnaam}"
+        ),
+        height=110,
+        key="rem2_message_email_input",
+    )
+
+    if st.button("Instellingen opslaan", type="primary", key="reminders_save_btn"):
+        ok = upsert_reminder_settings(
+            cid,
+            global_active,
+            int(rem1_days_before),
+            rem1_time.strftime("%H:%M"),
+            rem1_sms,
+            rem1_whatsapp,
+            rem1_email,
+            m1_sms,
+            m1_wa,
+            m1_email,
+            int(rem2_minutes_before),
+            rem2_sms,
+            rem2_whatsapp,
+            rem2_email,
+            m2_sms,
+            m2_wa,
+            m2_email,
+        )
+        if ok:
+            _success("Herinneringsinstellingen opgeslagen.")
+        else:
+            _error("Kon instellingen niet opslaan.")
+
+    st.info(
+        "Deze instellingen bepalen timing, kanalen en teksten. "
+        "WhatsApp/SMS worden alleen verzonden als er voldoende bundeltegoed is "
+        "en je externe provider correct is gekoppeld."
+    )
+    
 def render_ai(cid: int):
     settings = get_company_ai_settings(cid)
 
