@@ -811,7 +811,7 @@ def render_ai(company_id: int):
         phone_to_save = number_0900 or None
         line_type_new = "premium"
 
-    else:
+        else:
         # =============================
         # OPTIE 2: LOKAAL NUMMER
         # =============================
@@ -878,6 +878,14 @@ def render_ai(company_id: int):
             step=50,
             key="ai_add_minutes",
         )
+
+        phone_to_save = local_number or None
+        line_type_new = "standard"
+
+    # =============================
+    # AI-INSTRUCTIES
+    # =============================
+
     # Zorg dat de rand van dit tekstvak altijd zichtbaar is
     st.markdown(
         """
@@ -891,12 +899,6 @@ def render_ai(company_id: int):
         unsafe_allow_html=True,
     )
 
-        phone_to_save = local_number or None
-        line_type_new = "standard"
-
-        # =============================
-    # AI-INSTRUCTIES
-    # =============================
     st.markdown("### AI-telefoniste instructies (optioneel)")
     st.caption(
         "Personaliseer je assistente op maat van je bedrijf. "
@@ -930,10 +932,11 @@ def render_ai(company_id: int):
         "- Welke diensten je aanbiedt en de standaard duur per dienst.\n"
         "- Wat te doen bij volgeboekt: alternatief tijdstip voorstellen, wachtlijst, terugbelverzoek.\n"
         "- Regels rond annuleren/no-shows (bijv. min. 24u op voorhand).\n"
-        "- Of de assistente **nooit prijzen mag verzinnen**: beter zeggen dat iemand van het team dit bevestigt.\n"
+        "- Of de assistente nooit prijzen mag verzinnen: beter zeggen dat iemand van het team dit bevestigt.\n"
         "- Of ze afspraken altijd moet herhalen ter bevestiging (datum, tijd, dienst, naam klant).\n"
         "- Of ze bepaalde woorden/zinnen juist wél of juist niet mag gebruiken."
     )
+
 
     # =============================
     # SAFEGUARDS
