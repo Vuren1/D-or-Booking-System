@@ -602,6 +602,17 @@ def render_reminders(cid: int):
         "en je externe provider correct is gekoppeld."
     )
     
+from database import (
+    get_company_ai_settings,
+    set_company_ai_enabled,
+    set_company_ai_phone_number,
+    update_company_ai_line,
+    update_company_ai_safeguards,
+)
+# als je ai_assistant.py al hebt:
+# from ai_assistant import provision_ai_number_for_company, release_ai_number_for_company
+
+
 def render_ai(cid: int):
     settings = get_company_ai_settings(cid)
 
@@ -615,28 +626,139 @@ Zo mis je geen telefoontjes meer en bespaar je tijd aan de telefoon.
         """
     )
 
-    st.markdown("**Wat deze add-on kan bieden (concept):**")
-    st.markdown(
-        """
-- Eigen telefoonnummer per bedrijf
-- Automatisch afspraken inplannen volgens jouw beschikbaarheid
-- Bevestigingen via sms, WhatsApp of e-mail
-- Werkt samen met je bestaande herinneringen en Google Calendar integratie
-        """
+    st.markdown("### Kies jouw AI-lijn")
+
+    current_type = settings.get("ai_line_type", "standard")
+    is_premium = current_type == "premium"
+
+    col_lt1, col_lt2 = st.columns(2)
+    chosen_type = col_lt1.selectbox(
+        "Type AI-lijn",
+        options=["standard", "premium"],
+        index=0 if current_type == "standard" else 1,
+        format_func=lambda x: (
+            "Standaard (lokaal nummer, normale belkosten)"
+            if x == "standard"
+            else "Premium (0900-servicenummer, klant betaalt per minuut)"
+        ),
+        help=(
+            "Standaard: klant betaalt gewone belkosten, jij betaalt AI-minuten.\n"
+            "Premium: klant betaalt per minuut via provider, jij kunt je AI goedkoper aanbieden."
+        ),
     )
 
+    if chosen_type == "premium":
+        default_rate = (settings.get("ai_premium_rate_cents") or 10) / 100.0
+        premium_rate_eur = col_lt2.number_input(
+            "0900-tarief voor bellers (€ / min)",
+            min_value=0.05,
+            max_value=1.00,
+            step=0.05,
+            value=float(default_rate),
+            help="Dit is het officiële tarief dat de provider aan de beller rekent.",
+        )
+    else:
+        premium_rate_eur = None
+        col_lt2.caption("Bij standaard lijn gelden alleen normale belkosten van de beller.")
+
+    if st.button("Lijn-type opslaan", key="ai_save_line_type"):
+        update_company_ai_line(
+            cid,
+            chosen_type,
+            int(round(premium_rate_eur * 100)) if premium_rate_eur is not None else None,
+        )
+        _success("AI-lijntype opgeslagen.")
+        st.rerun()
+
+    st.markdown("---")
+    st.markdown("### Safeguards (gesprekslimieten)")
+
+    # Huidige waarden of defaults
+    max_minutes_current = int(settings.get("ai_guard_max_minutes") or (8 if is_premium else 10))
+    idle_seconds_current = int(settings.get("ai_guard_idle_seconds") or (25 if is_premium else 30))
+
+    # Grenzen: jij bewaakt de bovenkant, bedrijf heeft speelruimte
+    if chosen_type == "premium":
+        max_min = st.slider(
+            "Maximale gespreksduur (minuten)",
+            min_value=5,
+            max_value=15,
+            value=max_minutes_current if 5 <= max_minutes_current <= 15 else 8,
+            help="Na deze tijd ronden we af om onnodige kosten voor de klant te voorkomen."
+        )
+        idle_sec = st.slider(
+            "Idle-timeout (seconden zonder reactie)",
+            min_value=10,
+            max_value=60,
+            value=idle_seconds_current if 10 <= idle_seconds_current <= 60 else 25,
+            help="Bij stilte verbreken we het gesprek netjes om kosten te beperken."
+        )
+    else:
+        max_min = st.slider(
+            "Maximale gespreksduur (minuten)",
+            min_value=5,
+            max_value=20,
+            value=max_minutes_current if 5 <= max_minutes_current <= 20 else 10,
+            help="Beschermt tegen eindeloze gesprekken, maar laat genoeg tijd voor normale afspraken."
+        )
+        idle_sec = st.slider(
+            "Idle-timeout (seconden zonder reactie)",
+            min_value=15,
+            max_value=90,
+            value=idle_seconds_current if 15 <= idle_seconds_current <= 90 else 30,
+            help="Bij stilte verbreken we het gesprek netjes."
+        )
+
+    col_s1, col_s2 = st.columns(2)
+
+    # Premium: ophangen na boeking & tariefmelding zijn verplicht "aan"
+    if chosen_type == "premium":
+        hangup_after_booking = True
+        tariff_announce = True
+        col_s1.caption("Na bevestigde boeking wordt automatisch afgesloten (verplicht bij 0900).")
+        col_s2.caption("Tariefmelding aan het begin is verplicht en altijd actief.")
+    else:
+        hangup_after_booking = col_s1.checkbox(
+            "Automatisch afsluiten na bevestigde boeking",
+            value=bool(settings.get("ai_guard_hangup_after_booking", 1)),
+        )
+        tariff_announce = col_s2.checkbox(
+            "Tarief / kostenmelding aan het begin uitspreken",
+            value=bool(settings.get("ai_tariff_announce", 1)),
+            help="Aanbevolen voor transparantie, ook bij standaard lijn.",
+        )
+
+    if st.button("Safeguards opslaan", key="ai_save_guards"):
+        update_company_ai_safeguards(
+            cid,
+            max_minutes=max_min,
+            idle_seconds=idle_sec,
+            hangup_after_booking=hangup_after_booking,
+            tariff_announce=tariff_announce,
+        )
+        _success("Safeguards opgeslagen.")
+        st.rerun()
+
+    st.markdown("---")
+    st.markdown("### Activatie AI Telefoniste")
+
     if settings["enabled"]:
-        st.success("AI Telefoniste is momenteel **geactiveerd** voor dit bedrijf.")
+        st.success("AI Telefoniste is **geactiveerd** voor dit bedrijf.")
 
         if settings["phone_number"]:
-            st.markdown(f"**Gekoppeld nummer:** `{settings['phone_number']}`")
-        else:
-            st.info(
-                "Er is nog geen telefoonnummer gekoppeld. "
-                "Dit kan later automatisch via Twilio worden ingesteld."
-            )
+            st.markdown(f"**Actief nummer:** `{settings['phone_number']}`")
+            if chosen_type == "premium":
+                st.markdown(
+                    f"Dit is een 0900-lijn. Klanten betalen **€{(settings.get('ai_premium_rate_cents') or 10)/100:.2f} per minuut** via hun provider."
+                )
+            else:
+                st.markdown("Klanten betalen enkel hun standaard belkosten.")
 
-        if st.button("AI Telefoniste uitschakelen", type="secondary"):
+        else:
+            st.info("Er is nog geen nummer gekoppeld. Dit wordt technisch nog aan je account gekoppeld.")
+
+        if st.button("AI Telefoniste uitschakelen", type="secondary", key="ai_disable"):
+            # Hier kun je later release_ai_number_for_company(cid) aanroepen
             set_company_ai_enabled(cid, False)
             set_company_ai_phone_number(cid, None)
             _success("AI Telefoniste is uitgeschakeld.")
@@ -644,26 +766,32 @@ Zo mis je geen telefoontjes meer en bespaar je tijd aan de telefoon.
 
     else:
         st.info(
-            "Deze functie is beschikbaar als extra add-on. "
-            "Activeer hieronder om AI Telefoniste voor jouw bedrijf in te schakelen."
+            "Activeer hieronder de AI Telefoniste. Er wordt een eigen nummer voor je gekoppeld "
+            "(bij premium een 0900-servicenummer, bij standaard een lokaal nummer)."
         )
 
         st.markdown(
             """
-**Prijsvoorbeeld (aanpasbaar):**  
-Vanaf €XX per maand inclusief eigen nummer en een bundel belminuten.  
-Extra verbruik wordt transparant afgerekend.
+**Voorstel prijsstructuur (aanpasbaar voor jou):**
+
+- Standaard AI-lijn:
+  - Vast bedrag per maand (bijv. €49)
+  - + transparante minutenprijs (bijv. €0,15/min) die jij betaalt
+
+- Premium 0900 AI-lijn:
+  - Klant betaalt per minuut via provider (bijv. €0,10/min)
+  - Jij betaalt weinig tot niets per minuut voor de AI (wordt gecompenseerd uit 0900-inkomsten)
+  - Altijd tariefmelding & limieten om misbruik te voorkomen
             """
         )
 
-        if st.button("AI Telefoniste activeren", type="primary"):
+        if st.button("AI Telefoniste activeren", type="primary", key="ai_enable"):
+            # Hier later: nummer provisionen op basis van gekozen_type
             set_company_ai_enabled(cid, True)
             _success(
-                "AI Telefoniste is geactiveerd. "
-                "Zodra er een telefoonnummer is gekoppeld, verschijnt het hier."
+                "AI Telefoniste is geactiveerd. Het nummer wordt technisch gekoppeld in de volgende stap."
             )
             st.rerun()
-
 
 def render_bundles_and_usage(cid: int):
     st.markdown("## Bundels & verbruik")
