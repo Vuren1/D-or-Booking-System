@@ -890,21 +890,21 @@ def render_ai(company_id: int):
     # AI-INSTRUCTIES (met vaste gouden rand)
     # =============================
 
-    st.markdown(
+        st.markdown(
         """
         <style>
-        /* Altijd een duidelijke gouden rand rond het AI-instructieveld */
+        /* Altijd een subtiele gouden rand rond het AI-instructieveld */
         div[data-testid="stTextArea"] textarea {
-            border: 2px solid #d9a81e !important;
+            border: 1.5px solid #d9a81e !important;
             border-radius: 4px !important;
             box-shadow: none !important;
             outline: none !important;
         }
 
-        /* Geen extra effect bij focus; gewoon dezelfde rand houden */
+        /* Zelfde rand bij focus */
         div[data-testid="stTextArea"] textarea:focus,
         div[data-testid="stTextArea"] textarea:focus-visible {
-            border: 2px solid #d9a81e !important;
+            border: 1.5px solid #d9a81e !important;
             box-shadow: none !important;
             outline: none !important;
         }
