@@ -893,39 +893,30 @@ def render_ai(company_id: int):
         st.markdown(
     """
     <style>
-    /* Geef ALLE Streamlit textareas dezelfde vaste gouden rand
-       (inclusief die van 'Instructies voor jouw AI-telefoniste') */
-
-    /* Dit is de BaseWeb wrapper waar de focusrand normaal op staat */
-    div[data-baseweb="textarea"] {
-        box-shadow: 0 0 0 2px #d9a81e !important;  /* vaste gouden rand */
+    /* Vaste gouden rand rond alleen het AI-instructieveld */
+    textarea[placeholder^="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf"] {
+        box-shadow: 0 0 0 2px #d9a81e !important;
         border-radius: 12px !important;
         border: none !important;
+        outline: none !important;
         background-color: #f7f7f7 !important;
+        padding: 18px 24px !important;
     }
 
-    /* Bij focus niets veranderen: rand blijft identiek */
-    div[data-baseweb="textarea"]:focus-within {
-        box-shadow: 0 0 0 2px #d9a81e !important;
+    textarea[placeholder^="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf"]:focus {
+        box-shadow: 0 0 0 2px #d9a81e !important;  /* zelfde rand bij focus */
         border: none !important;
         outline: none !important;
-    }
-
-    /* Zorg dat de echte textarea zelf geen extra rand/shadow toevoegt */
-    div[data-baseweb="textarea"] textarea {
-        border: none !important;
-        box-shadow: none !important;
-        outline: none !important;
-        background: transparent !important;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-
-    st.markdown("### AI-telefoniste instructies (optioneel)")
-    st.caption(
+    ai_instructions_new = st.text_area(
+    "Instructies voor jouw AI-telefoniste",
+    value=ai_instructions,
+    placeholder=(
         "Personaliseer je assistente op maat van je bedrijf. "
         "Je kan de voorbeeldtekst onderaan kopiëren, hier plakken en aanpassen met je eigen gegevens."
     )
