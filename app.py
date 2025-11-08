@@ -808,34 +808,42 @@ def render_ai(company_id: int):
         phone_to_save = number_0900 or None
         line_type_new = "premium"
 
-    else:
+        else:
         # =============================
         # OPTIE 2: LOKAAL NUMMER
         # =============================
         st.markdown("### Optie 2: Lokaal nummer")
 
         if enabled_new:
-            st.success("Deze optie is actief zodra je hieronder je lokale nummer instelt.")
+            st.success("Deze optie is actief zodra je hieronder je AI-nummer instelt.")
         else:
             st.warning("Je hebt lokaal nummer geselecteerd, maar de AI-telefoniste staat uit.")
 
         local_number = st.text_input(
-    "AI-nummer (bestemmingsnummer voor doorschakeling)",
-    value=phone_number if line_type != "premium" else "",
-    placeholder="+31..., +32...",
-    help=(
-        "Dit is het nummer waarop de AI-telefoniste je oproepen mag aannemen. "
-        "Gebruik hier bij voorkeur een extra vast/VoIP-nummer. "
-        "Je stelt bij je provider in dat je huidige zakelijke nummer naar dit AI-nummer wordt "
-        "doorgeschakeld bij geen antwoord, buiten openingstijden of altijd."
-    ),
-    key="ai_local_number",
-)
+            "AI-nummer (bestemmingsnummer voor doorschakeling)",
+            value=phone_number if line_type != "premium" else "",
+            placeholder="+31..., +32...",
+            help=(
+                "Dit is het nummer waarop de AI-telefoniste je oproepen mag aannemen. "
+                "Gebruik bij voorkeur een extra vast/VoIP-nummer. "
+                "Stel bij je provider in dat je huidige zakelijke nummer naar dit AI-nummer "
+                "wordt doorgeschakeld bij geen antwoord, buiten openingstijden of altijd."
+            ),
+            key="ai_local_number",
+        )
 
+        st.info(
+            "Praktisch voorbeeld:\n"
+            "- Behoud je huidige nummer (bv. 03..., 06...).\n"
+            "- Vraag een extra nummer of VoIP-nummer aan waarop de AI mag opnemen.\n"
+            "- Stel bij je provider in:\n"
+            "    • Bij geen antwoord / bij bezet / buiten openingsuren: doorschakelen naar dit AI-nummer.\n"
+            "- Oproepen die op dit AI-nummer binnenkomen, worden door de AI afgehandeld en verbruiken minuten uit je bundel."
+        )
 
         st.metric("Beschikbare AI-belminuten", f"{ai_minutes} min")
         st.caption(
-            "Oproepen naar dit nummer verbruiken AI-minuten uit je bundel. "
+            "Oproepen naar dit AI-nummer verbruiken minuten uit je bundel. "
             "Is je bundel leeg, dan neemt de AI niet meer op tot je aanvult."
         )
 
@@ -870,8 +878,6 @@ def render_ai(company_id: int):
 
         phone_to_save = local_number or None
         line_type_new = "standard"
-
-    st.markdown("---")
 
     # =============================
     # SAFEGUARDS (voor de gekozen optie)
