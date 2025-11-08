@@ -48,6 +48,7 @@ from database import (
     update_company_ai_safeguards,
     get_ai_local_minutes_balance,
     add_ai_local_minutes,
+    update_company_ai_instructions,
 )
 
 APP_LOGO_URL = os.getenv("APP_LOGO_URL", "")
@@ -776,39 +777,9 @@ def render_ai(company_id: int):
     )
     use_premium = (selected_mode == "0900")
 
-    # We tonen slechts 1 blok: de gekozen optie
-    extra_min = 0  # alleen gebruikt bij lokaal nummer
-
-    if use_premium:
-        # =============================
-        # OPTIE 1: 0900-NUMMER
-        # =============================
-        st.markdown("### Optie 1: 0900-nummer")
-
-        if enabled_new:
-            st.success("Deze optie is actief zodra je hieronder je 0900-nummer instelt.")
-        else:
-            st.warning("Je hebt 0900 geselecteerd, maar de AI-telefoniste staat uit.")
-
-        number_0900 = st.text_input(
-            "Jouw 0900-nummer om te delen met klanten",
-            value=phone_number if line_type == "premium" else "",
-            placeholder="0900-....",
-            help="Dit nummer deel je met klanten. Oproepen hierop gaan naar de AI-telefoniste.",
-            key="ai_0900_number",
-        )
-
-        st.write(
-            f"- Vast tarief voor de beller: **{_format_money(PREMIUM_AI_0900_RATE_EUR)} per minuut**."
-        )
-        st.write("- Tarief is standaard voor alle bedrijven en niet aanpasbaar.")
-        st.write("- De kosten van de AI zijn hiermee gedekt; je hoeft geen AI-minutenbundels te kopen.")
-        st.write("- Ideaal als je kosten wilt doorbelasten aan de beller.")
-
-        phone_to_save = number_0900 or None
-        line_type_new = "premium"
-
-        use_premium = (selected_mode == "0900")
+    # Deze worden ingevuld per gekozen optie
+    phone_to_save = None
+    line_type_new = line_type
     extra_min = 0  # alleen gebruikt bij lokaal nummer
 
     if use_premium:
@@ -911,7 +882,9 @@ def render_ai(company_id: int):
         phone_to_save = local_number or None
         line_type_new = "standard"
 
-    # ==== HIER BUITEN IF/ELSE: INSTRUCTIES ====
+    # =============================
+    # AI-INSTRUCTIES
+    # =============================
     st.markdown("### AI-telefoniste instructies (optioneel)")
 
     ai_instructions_new = st.text_area(
@@ -929,7 +902,7 @@ def render_ai(company_id: int):
     )
 
     # =============================
-    # SAFEGUARDS (voor de gekozen optie)
+    # SAFEGUARDS
     # =============================
     st.markdown("### Veiligheidslimieten (Safeguards)")
 
@@ -987,6 +960,11 @@ def render_ai(company_id: int):
                 idle_seconds=int(idle_seconds_new),
                 hangup_after_booking=bool(hangup_new),
                 tariff_announce=bool(tariff_new),
+            )
+
+            update_company_ai_instructions(
+                company_id,
+                (ai_instructions_new or "").strip() or None,
             )
 
             if line_type_new == "standard" and extra_min > 0:
