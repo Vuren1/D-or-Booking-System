@@ -893,33 +893,40 @@ def render_ai(company_id: int):
         st.markdown(
     """
     <style>
-    /* Maak van het AI-instructieveld een blok met vaste gouden rand */
-    div[data-testid="stTextArea"] {
-        border: 1.5px solid #d9a81e !important;
+    /* Gouden rand ALTIJD rond specifiek AI-instructieveld
+       We pakken het veld via zijn placeholder-tekst */
+    div[data-testid="stTextArea"]:has(
+        textarea[placeholder^="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf"]
+    ) div[data-baseweb="textarea"] {
+        box-shadow: 0 0 0 2px #d9a81e !important;  /* vaste gouden rand */
         border-radius: 12px !important;
-        padding: 18px 24px !important;
-        background-color: #f7f7f7 !important;  /* zelfde look als nu */
-        box-shadow: none !important;
+        border: none !important;
+        background-color: #f7f7f7 !important;
     }
 
-    /* Haal de standaard randen/shadows van de echte textarea weg */
-    div[data-testid="stTextArea"] textarea {
+    /* Bij focus exact dezelfde stijl houden */
+    div[data-testid="stTextArea"]:has(
+        textarea[placeholder^="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf"]
+    ) div[data-baseweb="textarea"]:focus-within {
+        box-shadow: 0 0 0 2px #d9a81e !important;
+        border: none !important;
+        outline: none !important;
+    }
+
+    /* In dit specifieke veld geen extra rand/shadow op de echte textarea zelf */
+    div[data-testid="stTextArea"]:has(
+        textarea[placeholder^="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf"]
+    ) textarea {
         border: none !important;
         box-shadow: none !important;
         outline: none !important;
         background: transparent !important;
     }
-
-    /* Bij focus niets laten veranderen: rand blijft exact hetzelfde */
-    div[data-testid="stTextArea"]:focus-within {
-        border: 1.5px solid #d9a81e !important;
-        box-shadow: none !important;
-        outline: none !important;
-    }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
 
     st.markdown("### AI-telefoniste instructies (optioneel)")
     st.caption(
