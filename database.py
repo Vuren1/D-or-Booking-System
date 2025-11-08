@@ -67,6 +67,7 @@ def init_db():
         "ALTER TABLE companies ADD COLUMN ai_guard_idle_seconds INTEGER",
         "ALTER TABLE companies ADD COLUMN ai_guard_hangup_after_booking INTEGER",
         "ALTER TABLE companies ADD COLUMN ai_tariff_announce INTEGER",
+        "ALTER TABLE companies ADD COLUMN ai_local_minutes_balance INTEGER NOT NULL DEFAULT 0",
     ]:
         try:
             c.execute(ddl)
@@ -563,6 +564,35 @@ def update_company_ai_safeguards(
             1 if tariff_announce else 0,
             company_id,
         ),
+    )
+    conn.commit()
+    conn.close()
+def get_ai_local_minutes_balance(company_id: int) -> int:
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        "SELECT ai_local_minutes_balance FROM companies WHERE id = ?",
+        (company_id,),
+    )
+    row = c.fetchone()
+    conn.close()
+    if not row or row["ai_local_minutes_balance"] is None:
+        return 0
+    return int(row["ai_local_minutes_balance"])
+
+
+def add_ai_local_minutes(company_id: int, minutes: int) -> None:
+    if minutes <= 0:
+        return
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        """
+        UPDATE companies
+        SET ai_local_minutes_balance = COALESCE(ai_local_minutes_balance, 0) + ?
+        WHERE id = ?
+        """,
+        (int(minutes), company_id),
     )
     conn.commit()
     conn.close()
