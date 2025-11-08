@@ -893,25 +893,26 @@ def render_ai(company_id: int):
         st.markdown(
     """
     <style>
-    /* Wrapper rond het tekstveld: altijd gouden rand */
-    div[data-testid="stTextArea"] > div:nth-child(2) {
-        border: 1.5px solid #d9a81e !important;
-        border-radius: 4px !important;
-        box-shadow: none !important;
+    /* Altijd dezelfde "focus"-rand rond alle Streamlit textareas */
+    div[data-baseweb="textarea"] {
+        border: none !important;
+        box-shadow: 0 0 0 1.5px #d9a81e !important;  /* zelfde effect als focus */
+        border-radius: 8px !important;               /* pas aan indien nodig */
     }
 
-    /* Zelfde stijl wanneer het veld (of de textarea erin) focus heeft */
-    div[data-testid="stTextArea"] > div:nth-child(2):focus-within {
-        border: 1.5px solid #d9a81e !important;
-        box-shadow: none !important;
+    /* Bij focus niets extra's: gewoon dezelfde rand houden */
+    div[data-baseweb="textarea"]:focus-within {
+        box-shadow: 0 0 0 1.5px #d9a81e !important;
         outline: none !important;
+        border: none !important;
     }
 
-    /* Geen extra rand op de textarea zelf */
-    div[data-testid="stTextArea"] textarea {
+    /* De echte textarea zelf zonder eigen rand */
+    div[data-baseweb="textarea"] textarea {
         border: none !important;
         box-shadow: none !important;
         outline: none !important;
+        background: transparent !important;
     }
     </style>
     """,
