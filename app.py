@@ -891,27 +891,32 @@ def render_ai(company_id: int):
     # =============================
 
         st.markdown(
-        """
-        <style>
-        /* Altijd een subtiele gouden rand rond het AI-instructieveld */
-        div[data-testid="stTextArea"] textarea {
-            border: 1.5px solid #d9a81e !important;
-            border-radius: 4px !important;
-            box-shadow: none !important;
-            outline: none !important;
-        }
+    """
+    <style>
+    /* Wrapper rond het tekstveld: altijd gouden rand */
+    div[data-testid="stTextArea"] > div:nth-child(2) {
+        border: 1.5px solid #d9a81e !important;
+        border-radius: 4px !important;
+        box-shadow: none !important;
+    }
 
-        /* Zelfde rand bij focus */
-        div[data-testid="stTextArea"] textarea:focus,
-        div[data-testid="stTextArea"] textarea:focus-visible {
-            border: 1.5px solid #d9a81e !important;
-            box-shadow: none !important;
-            outline: none !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    /* Zelfde stijl wanneer het veld (of de textarea erin) focus heeft */
+    div[data-testid="stTextArea"] > div:nth-child(2):focus-within {
+        border: 1.5px solid #d9a81e !important;
+        box-shadow: none !important;
+        outline: none !important;
+    }
+
+    /* Geen extra rand op de textarea zelf */
+    div[data-testid="stTextArea"] textarea {
+        border: none !important;
+        box-shadow: none !important;
+        outline: none !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
     st.markdown("### AI-telefoniste instructies (optioneel)")
     st.caption(
