@@ -886,15 +886,17 @@ def render_ai(company_id: int):
         phone_to_save = local_number or None
         line_type_new = "standard"
 
-        # =============================
-    # AI-INSTRUCTIES (met vaste gouden rand)
-    # =============================
+        
 
-        st.markdown(
+# =============================
+# AI-INSTRUCTIES (met vaste gouden rand)
+# =============================
+
+st.markdown(
     """
     <style>
     /* Vaste gouden rand rond alleen het AI-instructieveld */
-    textarea[placeholder^="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf"] {
+    textarea[placeholder="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf. Gebruik de voorbeeldtekst onderaan als basis en pas die aan."] {
         box-shadow: 0 0 0 2px #d9a81e !important;
         border-radius: 12px !important;
         border: none !important;
@@ -903,7 +905,7 @@ def render_ai(company_id: int):
         padding: 18px 24px !important;
     }
 
-    textarea[placeholder^="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf"]:focus {
+    textarea[placeholder="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf. Gebruik de voorbeeldtekst onderaan als basis en pas die aan."]:focus {
         box-shadow: 0 0 0 2px #d9a81e !important;  /* zelfde rand bij focus */
         border: none !important;
         outline: none !important;
@@ -913,15 +915,7 @@ def render_ai(company_id: int):
     unsafe_allow_html=True,
 )
 
-    ai_instructions_new = st.text_area(
-    "Instructies voor jouw AI-telefoniste",
-    value=ai_instructions,
-    placeholder=(
-        "Personaliseer je assistente op maat van je bedrijf. "
-        "Je kan de voorbeeldtekst onderaan kopiëren, hier plakken en aanpassen met je eigen gegevens."
-    )
-
-    ai_instructions_new = st.text_area(
+ai_instructions_new = st.text_area(
     "Instructies voor jouw AI-telefoniste",
     value=ai_instructions,
     placeholder=(
@@ -930,27 +924,26 @@ def render_ai(company_id: int):
     ),
 )
 
+st.markdown(
+    "**Voorbeeldtekst** (kopieer en pas aan):\n"
+    "Je bent de telefoniste van **Kapsalon Luna** in **Antwerpen**. "
+    "Je spreekt vriendelijk en duidelijk Nederlands en gebruikt **'u'**. "
+    "Je helpt bij het maken, verplaatsen en annuleren van afspraken. "
+    "Je vraagt altijd naar **naam**, **telefoonnummer** en **reden van het bezoek**. "
+    "Je bevestigt elke afspraak kort en duidelijk en je geeft geen prijzen of info die je niet zeker weet."
+)
 
-    st.markdown(
-        "**Voorbeeldtekst** (kopieer en pas aan):\n"
-        "Je bent de telefoniste van **Kapsalon Luna** in **Antwerpen**. "
-        "Je spreekt vriendelijk en duidelijk Nederlands en gebruikt **'u'**. "
-        "Je helpt bij het maken, verplaatsen en annuleren van afspraken. "
-        "Je vraagt altijd naar **naam**, **telefoonnummer** en **reden van het bezoek**. "
-        "Je bevestigt elke afspraak kort en duidelijk en je geeft geen prijzen of info die je niet zeker weet."
-    )
-
-    st.markdown(
-        "**Ideeën wat je hier nog meer kunt toevoegen:**\n"
-        "- Taal & toon: formeel of informeel, 'u' of 'je'.\n"
-        "- Hoe je je bedrijf noemt aan de telefoon (bedrijfsnaam, merknaam, locatie).\n"
-        "- Welke diensten je aanbiedt en de standaard duur per dienst.\n"
-        "- Wat te doen bij volgeboekt: alternatief tijdstip voorstellen, wachtlijst, terugbelverzoek.\n"
-        "- Regels rond annuleren/no-shows (bijv. min. 24u op voorhand).\n"
-        "- Of de assistente nooit prijzen mag verzinnen: liever zeggen dat iemand van het team dit bevestigt.\n"
-        "- Of ze afspraken altijd moet herhalen ter bevestiging (datum, tijd, dienst, naam klant).\n"
-        "- Of ze bepaalde woorden/zinnen juist wél of juist niet mag gebruiken."
-    )
+st.markdown(
+    "**Ideeën wat je hier nog meer kunt toevoegen:**\n"
+    "- Taal & toon: formeel of informeel, 'u' of 'je'.\n"
+    "- Hoe je je bedrijf noemt aan de telefoon (bedrijfsnaam, merknaam, locatie).\n"
+    "- Welke diensten je aanbiedt en de standaard duur per dienst.\n"
+    "- Wat te doen bij volgeboekt: alternatief tijdstip voorstellen, wachtlijst, terugbelverzoek.\n"
+    "- Regels rond annuleren/no-shows (bijv. min. 24u op voorhand).\n"
+    "- Of de assistente nooit prijzen mag verzinnen.\n"
+    "- Of ze afspraken altijd moet herhalen ter bevestiging (datum, tijd, dienst, naam klant).\n"
+    "- Of ze bepaalde woorden/zinnen juist wél of juist niet mag gebruiken."
+)
 
     # =============================
     # SAFEGUARDS
