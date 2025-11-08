@@ -916,36 +916,196 @@ Met het **Lokaal AI-nummer** kies je voor maximale klantvriendelijkheid:
                 st.rerun()
 
 
-def render_bundles_and_usage(cid: int):
-    st.markdown("## Bundels & verbruik")
+def render_ai(cid: int):
+    settings = get_company_ai_settings(cid)
+    enabled = bool(settings.get("enabled", False))
+    line_type = (settings.get("ai_line_type") or "standard").strip()
+    phone_number = settings.get("phone_number")
 
-    usage = get_message_usage_summary(cid)
-    wc = usage.get("whatsapp_credits", 0)
-    sc = usage.get("sms_credits", 0)
-    el = usage.get("email_limit", 1000)
-    eu = usage.get("email_used", 0)
+    # "standard" = 0900-lijn (inbegrepen), "premium" = lokaal nummer (add-on)
+    is_0900 = line_type == "standard"
+    is_local = line_type == "premium"
 
-    st.caption(
-        "Basis: D’or Basic bevat o.a. je boekingspagina, agenda en e-mailherinneringen "
-        f"(bijvoorbeeld tot {el} e-mails/maand). WhatsApp en SMS werken via bundels."
+    st.markdown("## AI Telefoniste")
+
+    st.markdown(
+        """
+Met de **AI Telefoniste** laat je een digitale assistent de telefoon opnemen,
+vragen stellen zoals een echte medewerker en direct afspraken boeken in je D’or systeem.
+        """
     )
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("WhatsApp-tegoed", f"{wc} berichten")
-    col2.metric("SMS-tegoed", f"{sc} berichten")
-    col3.metric("E-mail gebruik", f"{eu} / {el}")
+    # ========================
+    # Keuze AI-lijn
+    # ========================
+    st.markdown("### Kies jouw AI-lijn")
 
-    if wc <= 0:
-        st.warning(
-            "Geen WhatsApp-tegoed: WhatsApp-herinneringen zijn uitgeschakeld totdat je een bundel toevoegt."
+    default_choice = (
+        "Lokaal AI-nummer (betaalde add-on)" if is_local else "0900 AI-lijn (inbegrepen)"
+    )
+
+    choice = st.radio(
+        "Welke lijn wil je gebruiken?",
+        options=[
+            "0900 AI-lijn (inbegrepen)",
+            "Lokaal AI-nummer (betaalde add-on)",
+        ],
+        index=0 if default_choice.startswith("0900") else 1,
+        help=(
+            "0900 AI-lijn: klant betaalt een klein bedrag per minuut, jij betaalt niets extra per gesprek.\n"
+            "Lokaal nummer: klant belt een normaal nummer, jij betaalt de AI-minuten via een add-on."
+        ),
+        key=f"ai_line_choice_{cid}",
+    )
+
+    if st.button("Opslaan keuze AI-lijn", key=f"ai_save_line_{cid}"):
+        if choice.startswith("0900"):
+            # standaard 0900-profiel
+            update_company_ai_line(
+                cid,
+                "standard",
+                int(PREMIUM_AI_0900_RATE_EUR * 100),
+            )
+            _success("AI-lijn ingesteld op 0900 (inbegrepen).")
+        else:
+            # lokaal nummer add-on
+            update_company_ai_line(
+                cid,
+                "premium",
+                None,
+            )
+            _success("AI-lijn ingesteld op lokaal nummer (betaalde add-on).")
+        st.rerun()
+
+    # Reload settings na wijziging
+    settings = get_company_ai_settings(cid)
+    line_type = (settings.get("ai_line_type") or "standard").strip()
+    enabled = bool(settings.get("enabled", False))
+    phone_number = settings.get("phone_number")
+    is_0900 = line_type == "standard"
+    is_local = line_type == "premium"
+
+    st.markdown("---")
+
+    # ========================
+    # 0900 AI-lijn (inbegrepen)
+    # ========================
+    if is_0900:
+        st.markdown("### 0900 AI-lijn (inbegrepen)")
+
+        st.markdown(
+            f"""
+Met de 0900 AI-lijn kun je **zonder extra maandelijkse kosten** gebruikmaken van de AI Telefoniste.
+
+- Jij betaalt geen kosten per minuut voor AI-gesprekken.
+- De beller betaalt een duidelijk tarief van **€{PREMIUM_AI_0900_RATE_EUR:.2f} per minuut** via zijn provider.
+- Wij hanteren vaste **safeguards** om alles eerlijk en veilig te houden:
+  - Verplichte tariefmelding aan het begin van elk gesprek.
+  - Automatisch afronden zodra de afspraak is ingepland.
+  - Max. gespreksduur om onnodig lange gesprekken te voorkomen.
+  - Automatisch beëindigen bij stilte (om kosten voor de klant te beperken).
+
+Deze instellingen zijn standaard en niet uit te zetten. Zo weet jij zeker dat je klanten eerlijk behandeld worden
+en jij geen verrassingen hebt.
+            """
         )
-    elif wc < 50:
-        st.info("Je WhatsApp-tegoed is bijna op. Overweeg een nieuwe bundel.")
 
-    if sc <= 0:
-        st.caption("Geen actief SMS-tegoed (optioneel, premium kanaal).")
-    elif sc < 50:
-        st.info("Je SMS-tegoed is bijna op.")
+        st.info(
+            "De 0900 AI-lijn is beschikbaar zonder extra maandelijkse kosten. "
+            "Je klanten betalen het minuut-tarief, jij niet."
+        )
+
+        st.button(
+            "AI Telefoniste via 0900 gebruiken",
+            key=f"use_0900_{cid}",
+            disabled=True,
+        )
+
+    # ========================
+    # Lokaal AI-nummer (add-on)
+    # ========================
+    if is_local:
+        st.markdown("### AI Lokaal Nummer add-on")
+
+        current_minutes = get_ai_local_minutes_balance(cid) or 0
+
+        st.markdown(
+            f"""
+Met de **AI Lokaal Nummer** add-on krijgen jouw klanten een normaal telefoonnummer
+(geen 0900), terwijl de AI voor jou de telefoon opneemt.
+
+- Inclusief **{LOCAL_AI_INCLUDED_MINUTES} AI-belminuten** in je bundel.
+- Extra minuten: **€{LOCAL_AI_EXTRA_RATE_EUR:.2f} per minuut**.
+- Klanten bellen tegen normaal tarief (of uit hun bundel).
+- Jij kunt zelf safeguards instellen (max. duur, stilte-timeout, afsluiten na boeking).
+
+**Huidig AI-minuten tegoed:** `{int(current_minutes)} min`
+            """
+        )
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(
+                f"Koop lokaal nummer + {LOCAL_AI_INCLUDED_MINUTES} min (€30)",
+                key=f"buy_local_ai_{cid}",
+            ):
+                # hier later: provisioning van écht nummer
+                add_ai_local_minutes(cid, LOCAL_AI_INCLUDED_MINUTES)
+                _success(
+                    f"Lokaal AI-nummer add-on geactiveerd met {LOCAL_AI_INCLUDED_MINUTES} minuten."
+                )
+                st.rerun()
+        with col2:
+            if st.button(
+                "Koop +100 extra minuten (€15)",
+                key=f"buy_local_ai_extra_{cid}",
+            ):
+                add_ai_local_minutes(cid, 100)
+                _success("100 extra AI-minuten toegevoegd.")
+                st.rerun()
+
+        st.markdown("### Safeguards voor lokaal nummer")
+
+        st.caption(
+            "Omdat jij hier de kosten draagt, kun je zelf limieten kiezen. "
+            "Deze gelden alleen voor het lokale nummer, niet voor 0900."
+        )
+
+        max_minutes = st.slider(
+            "Maximale gespreksduur (minuten)",
+            min_value=3,
+            max_value=30,
+            value=int(settings.get("max_call_minutes") or 10),
+            key=f"ai_safeguard_maxmin_{cid}",
+        )
+        idle_timeout = st.slider(
+            "Idle-timeout (seconden zonder reactie)",
+            min_value=10,
+            max_value=120,
+            value=int(settings.get("idle_timeout_seconds") or 30),
+            key=f"ai_safeguard_idle_{cid}",
+        )
+
+        if st.button("Safeguards opslaan", key=f"save_ai_safeguards_{cid}"):
+            update_company_ai_safeguards(cid, max_minutes, idle_timeout)
+            _success("Safeguards voor lokaal AI-nummer opgeslagen.")
+            st.rerun()
+
+    # Info als lokaal nog niet gekozen is
+    if not is_local:
+        st.markdown("### Liever een normaal lokaal nummer?")
+        st.markdown(
+            f"""
+Met de **AI Lokaal Nummer** add-on laat je klanten een normaal nummer bellen in plaats van 0900.
+
+- Inclusief **{LOCAL_AI_INCLUDED_MINUTES} AI-belminuten**
+- Extra minuten **€{LOCAL_AI_EXTRA_RATE_EUR:.2f} per minuut**
+- Volledige controle met eigen safeguards
+
+Activeer deze optie bovenaan door **'Lokaal AI-nummer (betaalde add-on)'** te kiezen
+en je keuze op te slaan.
+            """
+        )
 
     # ---------------- WhatsApp bundels ----------------
     st.markdown("### WhatsApp-bundels")
