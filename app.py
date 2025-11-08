@@ -891,27 +891,29 @@ def render_ai(company_id: int):
     # =============================
 
     # Rand van text area altijd tonen
-        st.markdown(
+            st.markdown(
         """
         <style>
-        /* Basisrand altijd zichtbaar */
+        /* Altijd een duidelijke gouden rand rond het AI-instructieveld */
         div[data-testid="stTextArea"] textarea {
-            border: 1.5px solid #d0d0d0 !important;
+            border: 2px solid #d9a81e !important;  /* goud */
             border-radius: 4px !important;
             box-shadow: none !important;
+            outline: none !important;
         }
 
-        /* Mooie gouden rand bij focus (klik / typen) */
+        /* Geen extra effect bij focus; gewoon dezelfde rand houden */
         div[data-testid="stTextArea"] textarea:focus,
         div[data-testid="stTextArea"] textarea:focus-visible {
-            border: 2px solid #d9a81e !important; /* zelfde goudkleur als je UI */
-            box-shadow: 0 0 0 1px rgba(217, 168, 30, 0.08) !important;
+            border: 2px solid #d9a81e !important;
+            box-shadow: none !important;
             outline: none !important;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
+
 
     st.markdown("### AI-telefoniste instructies (optioneel)")
     st.caption(
