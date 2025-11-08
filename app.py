@@ -40,6 +40,10 @@ from database import (
     # stats
     get_customer_stats,
     get_status_overview,
+    # AI
+    get_company_ai_settings,
+    set_company_ai_enabled,
+    set_company_ai_phone_number,
 )
 
 APP_LOGO_URL = os.getenv("APP_LOGO_URL", "")
@@ -551,6 +555,70 @@ def render_reminders(cid: int):
         height=110,
         key="rem2_message_email_input",
     )
+    
+    def render_ai(company_id: int):
+    settings = get_company_ai_settings(company_id)
+
+    st.subheader("AI Telefoniste (Add-on)")
+
+    st.markdown(
+        """
+Met de **AI Telefoniste** krijgen jouw klanten een eigen telefoonnummer om te bellen.
+De AI neemt op namens jouw bedrijf, stelt de juiste vragen en plant afspraken direct in je online boekingssysteem.
+Zo mis je geen telefoontjes meer en bespaar je tijd aan de telefoon.
+        """
+    )
+
+    st.markdown("**Wat deze add-on kan bieden (concept):**")
+    st.markdown(
+        """
+- Eigen telefoonnummer per bedrijf
+- Automatisch afspraken inplannen volgens jouw beschikbaarheid
+- Bevestigingen via sms, WhatsApp of e-mail
+- Werkt samen met je bestaande herinneringen en Google Calendar integratie
+        """
+    )
+
+    if settings["enabled"]:
+        st.success("AI Telefoniste is momenteel **geactiveerd** voor dit bedrijf.")
+
+        if settings["phone_number"]:
+            st.markdown(f"**Gekoppeld nummer:** `{settings['phone_number']}`")
+        else:
+            st.info(
+                "Er is nog geen telefoonnummer gekoppeld. "
+                "Dit kan later automatisch via Twilio worden ingesteld."
+            )
+
+        if st.button("AI Telefoniste uitschakelen", type="secondary"):
+            set_company_ai_enabled(company_id, False)
+            set_company_ai_phone_number(company_id, None)
+            st.success("AI Telefoniste is uitgeschakeld.")
+            st.experimental_rerun()
+
+    else:
+        st.info(
+            "Deze functie is beschikbaar als extra add-on. "
+            "Activeer hieronder om AI Telefoniste voor jouw bedrijf in te schakelen."
+        )
+
+        st.markdown(
+            """
+**Prijsvoorbeeld (aanpasbaar):**  
+Vanaf €XX per maand inclusief eigen nummer en een bundel belminuten.  
+Extra verbruik wordt transparant afgerekend.
+            """
+        )
+
+        if st.button("AI Telefoniste activeren", type="primary"):
+            # Hier kun je later automatisch een Twilio-nummer toewijzen.
+            set_company_ai_enabled(company_id, True)
+            st.success(
+                "AI Telefoniste is geactiveerd. "
+                "Zodra er een telefoonnummer is gekoppeld, verschijnt het hier."
+            )
+            st.experimental_rerun()
+
 
     # -------- Opslaan --------
     if st.button("Instellingen opslaan", type="primary", key="reminders_save_btn"):
@@ -768,9 +836,12 @@ def render_account(cid: int):
 # =============================
 # Routering
 # =============================
+
 if view_mode == "public":
+    # Publieke boekingspagina voor klanten
     render_public_catalog(company_id)
 else:
+    # Beheeromgeving tabs
     tabs = st.tabs(
         [
             "Diensten",
@@ -778,18 +849,38 @@ else:
             "Boekingen",
             "Herinneringen",
             "Bundels & verbruik",
+            "AI",
             "Account",
         ]
     )
-    with tabs[0]:
+
+    (
+        tab_diensten,
+        tab_beschikbaarheid,
+        tab_boekingen,
+        tab_herinneringen,
+        tab_bundels,
+        tab_ai,
+        tab_account,
+    ) = tabs
+
+    with tab_diensten:
         render_services(company_id)
-    with tabs[1]:
+
+    with tab_beschikbaarheid:
         render_availability(company_id)
-    with tabs[2]:
+
+    with tab_boekingen:
         render_bookings(company_id)
-    with tabs[3]:
+
+    with tab_herinneringen:
         render_reminders(company_id)
-    with tabs[4]:
+
+    with tab_bundels:
         render_bundles_and_usage(company_id)
-    with tabs[5]:
+
+    with tab_ai:
+        render_ai(company_id)
+
+    with tab_account:
         render_account(company_id)
