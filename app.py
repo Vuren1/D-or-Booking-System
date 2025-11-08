@@ -466,6 +466,199 @@ def render_reminders(cid: int):
         value=int(settings["rem1_days_before"]),
         key="rem1_days_before_input",
     )
+def render_bundles_and_usage(cid: int):
+    st.markdown("## Bundels & verbruik")
+
+    usage = get_message_usage_summary(cid) or {}
+    whatsapp_credits = int(usage.get("whatsapp_credits", 0))
+    sms_credits = int(usage.get("sms_credits", 0))
+    email_limit = int(usage.get("email_limit", 0))
+    email_used = int(usage.get("email_used", 0))
+    email_left = max(email_limit - email_used, 0)
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("WhatsApp-tegoed", f"{whatsapp_credits}")
+    col2.metric("SMS-tegoed", f"{sms_credits}")
+    col3.metric(
+        "E-mail verbruik",
+        f"{email_used} / {email_limit}",
+        help="Verzonden e-mails t.o.v. je limiet",
+    )
+
+    st.markdown("### Handmatig tegoed toevoegen (admin/debug)")
+
+    c1, c2, c3 = st.columns(3)
+    add_wa = c1.number_input(
+        "Extra WhatsApp-credits",
+        min_value=0,
+        step=10,
+        key="bundles_add_wa",
+    )
+    add_sms_val = c2.number_input(
+        "Extra SMS-credits",
+        min_value=0,
+        step=10,
+        key="bundles_add_sms",
+    )
+    add_email_val = c3.number_input(
+        "Extra e-mail limiet",
+        min_value=0,
+        step=100,
+        key="bundles_add_email",
+    )
+
+    if st.button("Tegoed bijwerken", type="primary", key="bundles_save_btn"):
+        changed = False
+        if add_wa > 0:
+            add_whatsapp_credits(cid, int(add_wa))
+            changed = True
+        if add_sms_val > 0:
+            add_sms_credits(cid, int(add_sms_val))
+            changed = True
+        if add_email_val > 0:
+            add_email_limit(cid, int(add_email_val))
+            changed = True
+
+        if changed:
+            _success("Bundels bijgewerkt.")
+            st.rerun()
+        else:
+            _info("Geen wijzigingen om op te slaan.")
+
+    st.info(
+        "Deze pagina toont je huidige bundels en verbruik. "
+        "In productie kun je dit koppelen aan betalingen of automatische facturatie."
+    )
+def render_ai(cid: int):
+    st.markdown("## AI Telefoniste / Callbot")
+
+    settings = get_company_ai_settings(cid) or {}
+
+    # Compatibel met beide varianten van get_company_ai_settings
+    enabled = bool(
+        settings.get("enabled")
+        or settings.get("ai_assistant_enabled", 0)
+    )
+    phone_number = (
+        settings.get("phone_number")
+        or settings.get("ai_phone_number")
+        or ""
+    )
+
+    line_type = settings.get("ai_line_type", "standard")
+    premium_rate_cents = int(settings.get("ai_premium_rate_cents") or 10)
+    guard_max_minutes = int(settings.get("ai_guard_max_minutes") or 8)
+    guard_idle_seconds = int(settings.get("ai_guard_idle_seconds") or 25)
+    guard_hangup_after_booking = bool(settings.get("ai_guard_hangup_after_booking", 1))
+    tariff_announce = bool(settings.get("ai_tariff_announce", 1))
+
+    col1, col2 = st.columns(2)
+    enabled_new = col1.checkbox(
+        "AI-telefoniste inschakelen",
+        value=enabled,
+        key="ai_enabled",
+    )
+    phone_new = col2.text_input(
+        "AI-telefoonnummer (virtueel/lokaal/0900)",
+        value=phone_number,
+        placeholder="+31..., +32..., 0900...",
+        key="ai_phone",
+    )
+
+    st.markdown("### Lijntype & tarieven")
+    lt_col1, lt_col2 = st.columns(2)
+    line_type_new = lt_col1.selectbox(
+        "Type lijn",
+        options=["standard", "premium"],
+        index=0 if line_type == "standard" else 1,
+        format_func=lambda v: (
+            "Standaard (gewoon tarief)" if v == "standard"
+            else "Premium / 0900 (beller betaalt per minuut)"
+        ),
+        key="ai_line_type",
+    )
+
+    if line_type_new == "premium":
+        premium_rate_cents_new = lt_col2.number_input(
+            "Tarief per minuut (cent)",
+            min_value=0,
+            max_value=999,
+            value=premium_rate_cents,
+            step=5,
+            key="ai_premium_rate",
+        )
+    else:
+        lt_col2.write("Beller betaalt enkel zijn eigen provider-tarief.")
+        premium_rate_cents_new = None
+
+    st.markdown("### Veiligheidslimieten")
+    g1, g2, g3, g4 = st.columns(4)
+    max_minutes_new = g1.number_input(
+        "Max. gespreksduur (minuten)",
+        min_value=1,
+        max_value=60,
+        value=guard_max_minutes,
+        key="ai_guard_max_minutes",
+    )
+    idle_seconds_new = g2.number_input(
+        "Max. stilte (seconden)",
+        min_value=5,
+        max_value=300,
+        value=guard_idle_seconds,
+        key="ai_guard_idle_seconds",
+    )
+    hangup_new = g3.checkbox(
+        "Ophangen na succesvolle booking",
+        value=guard_hangup_after_booking,
+        key="ai_guard_hangup",
+    )
+    tariff_new = g4.checkbox(
+        "Tarief aankondigen bij start",
+        value=tariff_announce,
+        key="ai_tariff_announce",
+    )
+
+    st.markdown("### Lokale AI-minuten (optioneel)")
+    minutes_balance = get_ai_local_minutes_balance(cid)
+    st.metric("Beschikbare lokale AI-minuten", f"{minutes_balance} min")
+
+    extra_min = st.number_input(
+        "Handmatig minuten toevoegen (admin/debug)",
+        min_value=0,
+        max_value=10000,
+        step=50,
+        key="ai_add_minutes",
+    )
+
+    if st.button("AI-instellingen opslaan", type="primary", key="ai_save_btn"):
+        set_company_ai_enabled(cid, enabled_new)
+        set_company_ai_phone_number(cid, phone_new or None)
+        update_company_ai_line(
+            cid,
+            line_type=line_type_new,
+            premium_rate_cents=(
+                int(premium_rate_cents_new)
+                if line_type_new == "premium" and premium_rate_cents_new is not None
+                else None
+            ),
+        )
+        update_company_ai_safeguards(
+            cid,
+            max_minutes=int(max_minutes_new),
+            idle_seconds=int(idle_seconds_new),
+            hangup_after_booking=bool(hangup_new),
+            tariff_announce=bool(tariff_new),
+        )
+        if extra_min > 0:
+            add_ai_local_minutes(cid, int(extra_min))
+
+        _success("AI-instellingen opgeslagen.")
+        st.rerun()
+
+    st.info(
+        "Hier beheer je je AI-telefoniste. Koppel dit in productie aan je belprovider/API "
+        "voor automatische nummerkoppeling en billing."
+    )
 
     def _parse_time_str(value: str) -> dtime:
         try:
