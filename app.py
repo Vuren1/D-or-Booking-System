@@ -727,6 +727,7 @@ def render_ai(company_id: int):
 
     # Huidige instellingen ophalen
     settings = get_company_ai_settings(company_id) or {}
+    ai_instructions = (settings.get("ai_instructions") or "").strip()
 
     enabled = bool(
         settings.get("enabled")
@@ -776,6 +777,38 @@ def render_ai(company_id: int):
     use_premium = (selected_mode == "0900")
 
     # We tonen slechts 1 blok: de gekozen optie
+    extra_min = 0  # alleen gebruikt bij lokaal nummer
+
+    if use_premium:
+        # =============================
+        # OPTIE 1: 0900-NUMMER
+        # =============================
+        st.markdown("### Optie 1: 0900-nummer")
+
+        if enabled_new:
+            st.success("Deze optie is actief zodra je hieronder je 0900-nummer instelt.")
+        else:
+            st.warning("Je hebt 0900 geselecteerd, maar de AI-telefoniste staat uit.")
+
+        number_0900 = st.text_input(
+            "Jouw 0900-nummer om te delen met klanten",
+            value=phone_number if line_type == "premium" else "",
+            placeholder="0900-....",
+            help="Dit nummer deel je met klanten. Oproepen hierop gaan naar de AI-telefoniste.",
+            key="ai_0900_number",
+        )
+
+        st.write(
+            f"- Vast tarief voor de beller: **{_format_money(PREMIUM_AI_0900_RATE_EUR)} per minuut**."
+        )
+        st.write("- Tarief is standaard voor alle bedrijven en niet aanpasbaar.")
+        st.write("- De kosten van de AI zijn hiermee gedekt; je hoeft geen AI-minutenbundels te kopen.")
+        st.write("- Ideaal als je kosten wilt doorbelasten aan de beller.")
+
+        phone_to_save = number_0900 or None
+        line_type_new = "premium"
+
+        use_premium = (selected_mode == "0900")
     extra_min = 0  # alleen gebruikt bij lokaal nummer
 
     if use_premium:
@@ -877,6 +910,23 @@ def render_ai(company_id: int):
 
         phone_to_save = local_number or None
         line_type_new = "standard"
+
+    # ==== HIER BUITEN IF/ELSE: INSTRUCTIES ====
+    st.markdown("### AI-telefoniste instructies (optioneel)")
+
+    ai_instructions_new = st.text_area(
+        "Beschrijf in je eigen woorden hoe de AI zich moet gedragen voor jouw bedrijf.",
+        value=ai_instructions,
+        placeholder=(
+            "Voorbeeld:\n"
+            "Je bent de telefoniste van Kapsalon Luna in Antwerpen. "
+            "Je spreekt vriendelijk en duidelijk Nederlands, zegt 'u'. "
+            "Je helpt bij het maken, verplaatsen en annuleren van afspraken. "
+            "Je vraagt altijd naar naam, telefoonnummer en reden van het bezoek."
+        ),
+        height=160,
+        key="ai_instructions_input",
+    )
 
     # =============================
     # SAFEGUARDS (voor de gekozen optie)
