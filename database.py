@@ -40,22 +40,33 @@ def init_db():
     conn = get_connection()
     c = conn.cursor()
 
-    # ---------------- Companies ----------------
+        # ---------------- Companies ----------------
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS companies (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            name       TEXT    NOT NULL,
-            email      TEXT    UNIQUE,
-            password   TEXT,
-            paid       INTEGER DEFAULT 0,
-            created_at TEXT,
-            slug       TEXT    UNIQUE,
-            logo_path  TEXT
+            id                           INTEGER PRIMARY KEY AUTOINCREMENT,
+            name                         TEXT    NOT NULL,
+            email                        TEXT    UNIQUE,
+            password                     TEXT,
+            paid                         INTEGER DEFAULT 0,
+            created_at                   TEXT,
+            slug                         TEXT    UNIQUE,
+            logo_path                    TEXT,
+            ai_assistant_enabled         INTEGER NOT NULL DEFAULT 0,
+            ai_phone_number              TEXT,
+            ai_line_type                 TEXT NOT NULL DEFAULT 'standard',
+            ai_premium_rate_cents        INTEGER,
+            ai_guard_max_minutes         INTEGER,
+            ai_guard_idle_seconds        INTEGER,
+            ai_guard_hangup_after_booking INTEGER,
+            ai_tariff_announce           INTEGER,
+            ai_local_minutes_balance     INTEGER NOT NULL DEFAULT 0,
+            ai_instructions              TEXT
         )
         """
     )
-            # migreer kolommen indien ontbreken
+
+    # migreer kolommen indien ontbreken (voor bestaande databases)
     for ddl in [
         "ALTER TABLE companies ADD COLUMN slug TEXT UNIQUE",
         "ALTER TABLE companies ADD COLUMN logo_path TEXT",
@@ -68,11 +79,14 @@ def init_db():
         "ALTER TABLE companies ADD COLUMN ai_guard_hangup_after_booking INTEGER",
         "ALTER TABLE companies ADD COLUMN ai_tariff_announce INTEGER",
         "ALTER TABLE companies ADD COLUMN ai_local_minutes_balance INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE companies ADD COLUMN ai_instructions TEXT",
     ]:
         try:
             c.execute(ddl)
         except Exception:
+            # kolom bestaat al -> negeren
             pass
+
 
 
     # Slugs invullen voor bestaande bedrijven
@@ -433,7 +447,8 @@ def get_company_ai_settings(company_id: int) -> dict:
             ai_guard_max_minutes,
             ai_guard_idle_seconds,
             ai_guard_hangup_after_booking,
-            ai_tariff_announce
+            ai_tariff_announce,
+            ai_instructions
         FROM companies
         WHERE id = ?
         """,
@@ -452,6 +467,7 @@ def get_company_ai_settings(company_id: int) -> dict:
         "ai_guard_idle_seconds": 25,
         "ai_guard_hangup_after_booking": 1,
         "ai_tariff_announce": 1,
+        "ai_instructions": "",
     }
 
     if not row:
@@ -484,7 +500,27 @@ def get_company_ai_settings(company_id: int) -> dict:
     if "ai_tariff_announce" in row.keys() and row["ai_tariff_announce"] is not None:
         d["ai_tariff_announce"] = int(row["ai_tariff_announce"])
 
+    if "ai_instructions" in row.keys() and row["ai_instructions"] is not None:
+        d["ai_instructions"] = str(row["ai_instructions"])
+
     return d
+
+
+def update_company_ai_instructions(company_id: int, instructions: str | None):
+    conn = get_connection()
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            UPDATE companies
+            SET ai_instructions = ?
+            WHERE id = ?
+            """,
+            (instructions, company_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def set_company_ai_enabled(company_id: int, enabled: bool) -> None:
