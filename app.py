@@ -893,19 +893,19 @@ def render_ai(company_id: int):
         st.markdown(
     """
     <style>
-    /* Vast gouden randje rond alleen het AI-instructieveld */
-    textarea[placeholder="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf. Gebruik de voorbeeldtekst onderaan als basis en pas die aan."] {
-        border: 2px solid #d9a81e !important;
+    /* Altijd dezelfde gouden rand als de focus-styling
+       op de inner wrapper van elke st.text_area */
+    div[data-testid="stTextArea"] > div:nth-child(2) > div {
+        box-shadow: 0 0 0 2px #d9a81e !important;
         border-radius: 12px !important;
-        box-shadow: none !important;
-        outline: none !important;
+        border: none !important;
         background-color: #f7f7f7 !important;
-        padding: 18px 24px !important;
     }
 
-    textarea[placeholder="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf. Gebruik de voorbeeldtekst onderaan als basis en pas die aan."]:focus {
-        border: 2px solid #d9a81e !important;  /* zelfde rand bij focus */
-        box-shadow: none !important;
+    /* Bij focus niets veranderen: rand blijft identiek */
+    div[data-testid="stTextArea"] > div:nth-child(2) > div:focus-within {
+        box-shadow: 0 0 0 2px #d9a81e !important;
+        border: none !important;
         outline: none !important;
     }
     </style>
