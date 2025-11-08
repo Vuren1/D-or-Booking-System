@@ -893,7 +893,16 @@ def render_ai(company_id: int):
         st.markdown(
     """
     <style>
-    /* 1. Reset de echte textarea, geen eigen rand / shadow */
+    /* Maak van het AI-instructieveld een blok met vaste gouden rand */
+    div[data-testid="stTextArea"] {
+        border: 1.5px solid #d9a81e !important;
+        border-radius: 12px !important;
+        padding: 18px 24px !important;
+        background-color: #f7f7f7 !important;  /* zelfde look als nu */
+        box-shadow: none !important;
+    }
+
+    /* Haal de standaard randen/shadows van de echte textarea weg */
     div[data-testid="stTextArea"] textarea {
         border: none !important;
         box-shadow: none !important;
@@ -901,21 +910,8 @@ def render_ai(company_id: int):
         background: transparent !important;
     }
 
-    /* 2. Geef de zichtbare container rond de textarea ALTIJD de gouden rand.
-          We targetten meerdere mogelijke wrappers zodat het werkt in verschillende Streamlit-versies. */
-    div[data-testid="stTextArea"] > div:nth-child(2),
-    div[data-testid="stTextArea"] div[data-baseweb="textarea"],
-    div[data-testid="stTextArea"] div:has(> textarea) {
-        border: 1.5px solid #d9a81e !important;
-        border-radius: 12px !important;
-        box-shadow: none !important;
-        background-color: #f7f7f7 !important;  /* match je huidige look */
-    }
-
-    /* 3. Bij focus niets veranderen: rand blijft exact hetzelfde */
-    div[data-testid="stTextArea"] > div:nth-child(2):focus-within,
-    div[data-testid="stTextArea"] div[data-baseweb="textarea"]:focus-within,
-    div[data-testid="stTextArea"] div:has(> textarea:focus) {
+    /* Bij focus niets laten veranderen: rand blijft exact hetzelfde */
+    div[data-testid="stTextArea"]:focus-within {
         border: 1.5px solid #d9a81e !important;
         box-shadow: none !important;
         outline: none !important;
