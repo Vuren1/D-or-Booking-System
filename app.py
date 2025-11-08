@@ -273,6 +273,7 @@ if not view_mode:
 # =============================
 # Views
 # =============================
+
 def render_public_catalog(cid: int):
     st.markdown("### Diensten & tarieven")
     df = get_public_services(cid)
@@ -410,8 +411,6 @@ def render_bookings(cid: int):
             st.dataframe(cust, use_container_width=True)
 
 
-render_reminders
-
 def render_ai(cid: int):
     settings = get_company_ai_settings(cid)
 
@@ -449,8 +448,8 @@ Zo mis je geen telefoontjes meer en bespaar je tijd aan de telefoon.
         if st.button("AI Telefoniste uitschakelen", type="secondary"):
             set_company_ai_enabled(cid, False)
             set_company_ai_phone_number(cid, None)
-            st.success("AI Telefoniste is uitgeschakeld.")
-            st.experimental_rerun()
+            _success("AI Telefoniste is uitgeschakeld.")
+            st.rerun()
 
     else:
         st.info(
@@ -468,11 +467,12 @@ Extra verbruik wordt transparant afgerekend.
 
         if st.button("AI Telefoniste activeren", type="primary"):
             set_company_ai_enabled(cid, True)
-            st.success(
+            _success(
                 "AI Telefoniste is geactiveerd. "
                 "Zodra er een telefoonnummer is gekoppeld, verschijnt het hier."
             )
-            st.experimental_rerun()
+            st.rerun()
+
 
 def render_bundles_and_usage(cid: int):
     st.markdown("## Bundels & verbruik")
@@ -544,62 +544,60 @@ def render_bundles_and_usage(cid: int):
         _success("E-mail limiet verhoogd met 1000.")
         st.rerun()
 
-    # ---------------- Uitleg kanalen (blauwe info) ----------------
+    # ---------------- Uitleg kanalen ----------------
     st.info(
         """
-        **Welke herinneringskanalen kies je het beste?**
+**Welke herinneringskanalen kies je het beste?**
 
-        **SMS**
-        - ✅ Komt bijna altijd aan, ook zonder internet.
-        - ✅ Werkt op elke GSM.
-        - ⚠️ Duurder per bericht.
-        - ⚠️ Minder geschikt voor langere teksten / geen logo.  
-        **Ideaal voor:** de laatste, belangrijke reminder op de dag zelf.
+**SMS**
+- ✅ Komt bijna altijd aan, ook zonder internet.
+- ✅ Werkt op elke GSM.
+- ⚠️ Duurder per bericht.
+- ⚠️ Minder geschikt voor langere teksten / geen logo.  
+**Ideaal voor:** de laatste, belangrijke reminder op de dag zelf.
 
-        **WhatsApp**
-        - ✅ Goedkoper dan SMS.
-        - ✅ Duidelijke berichten met logo, emoji en linkjes.
-        - ✅ Klanten kunnen gemakkelijk antwoorden of bevestigen.
-        - ⚠️ Werkt alleen met internet en WhatsApp.
-        - ⚠️ Bij slechte verbinding kan het later binnenkomen.  
-        **Ideaal voor:** herinnering 1 of enkele dagen vóór de afspraak.
+**WhatsApp**
+- ✅ Goedkoper dan SMS.
+- ✅ Duidelijke berichten met logo, emoji en linkjes.
+- ✅ Klanten kunnen gemakkelijk antwoorden of bevestigen.
+- ⚠️ Werkt alleen met internet en WhatsApp.
+- ⚠️ Bij slechte verbinding kan het later binnenkomen.  
+**Ideaal voor:** herinnering 1 of enkele dagen vóór de afspraak.
 
-        **E-mail**
-        - ✅ Praktisch gratis.
-        - ✅ Perfect voor bevestigingen en uitgebreide info.
-        - ⚠️ Niet altijd direct gelezen, kan in spam belanden.  
-        **Ideaal voor:** boekingsbevestiging + extra informatie.
+**E-mail**
+- ✅ Praktisch gratis.
+- ✅ Perfect voor bevestigingen en uitgebreide info.
+- ⚠️ Niet altijd direct gelezen, kan in spam belanden.  
+**Ideaal voor:** boekingsbevestiging + extra informatie.
 
-        **Aanbevolen combinatie**
-        - 1e herinnering (dagen ervoor): **WhatsApp + e-mail** (kostefficiënt & duidelijk).
-        - 2e herinnering (dag zelf): optioneel **SMS** voor maximale zekerheid.
+**Aanbevolen combinatie**
+- 1e herinnering (dagen ervoor): **WhatsApp + e-mail**.
+- 2e herinnering (dag zelf): optioneel **SMS** voor maximale zekerheid.
         """
     )
 
-    # ---------------- Tarieven tekst (info) ----------------
     st.markdown("---")
     st.markdown("### Tarieven (voorbeeld, aanpasbaar)")
-
     st.markdown(
         """
-        **WhatsApp-bundels**  
-        - Bundel S (250 berichten): **€15**  
-        - Bundel M (500 berichten): **€28**  
-        - Bundel L (1.000 berichten): **€52**
+**WhatsApp-bundels**  
+- Bundel S (250 berichten): **€15**  
+- Bundel M (500 berichten): **€28**  
+- Bundel L (1.000 berichten): **€52**
 
-        **SMS-bundels**  
-        - Bundel S (100 berichten): **€15**  
-        - Bundel M (250 berichten): **€35**  
-        - Bundel L (500 berichten): **€65**
+**SMS-bundels**  
+- Bundel S (100 berichten): **€15**  
+- Bundel M (250 berichten): **€35**  
+- Bundel L (500 berichten): **€65**
 
-        **E-mail**  
-        - Inclusief in D’or Basic, bijv. tot **1.000 e-mails / maand**.  
-        - Extra 1.000 e-mails: **€5**
+**E-mail**  
+- Inclusief in D’or Basic, bijv. tot **1.000 e-mails / maand**.  
+- Extra 1.000 e-mails: **€5**
 
-        _Prijzen zijn indicatief en kunnen door jou als beheerder worden aangepast.
-        Je klanten betalen alleen voor daadwerkelijke bundels (geen verborgen kosten)._ 
+_Praktijk: jij als aanbieder kunt deze prijzen zelf bepalen. Dit blok is puur informatief richting je klanten._
         """
     )
+
 
 def render_account(cid: int):
     st.markdown("## Account & abonnement")
@@ -652,7 +650,6 @@ def render_account(cid: int):
         st.session_state.clear()
         _set_query_params()
         st.rerun()
-
 
 # =============================
 # Routering
