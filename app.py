@@ -878,6 +878,18 @@ def render_ai(company_id: int):
             step=50,
             key="ai_add_minutes",
         )
+    # Zorg dat de rand van dit tekstvak altijd zichtbaar is
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stTextArea"] textarea {
+            border: 1px solid #d0d0d0 !important;
+            box-shadow: none !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
         phone_to_save = local_number or None
         line_type_new = "standard"
