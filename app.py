@@ -820,12 +820,18 @@ def render_ai(company_id: int):
             st.warning("Je hebt lokaal nummer geselecteerd, maar de AI-telefoniste staat uit.")
 
         local_number = st.text_input(
-            "Jouw lokale AI-nummer",
-            value=phone_number if line_type != "premium" else "",
-            placeholder="+31..., +32...",
-            help="Bijvoorbeeld een regionaal nummer dat je via je provider naar de AI doorschakelt.",
-            key="ai_local_number",
-        )
+    "AI-nummer (bestemmingsnummer voor doorschakeling)",
+    value=phone_number if line_type != "premium" else "",
+    placeholder="+31..., +32...",
+    help=(
+        "Dit is het nummer waarop de AI-telefoniste je oproepen mag aannemen. "
+        "Gebruik hier bij voorkeur een extra vast/VoIP-nummer. "
+        "Je stelt bij je provider in dat je huidige zakelijke nummer naar dit AI-nummer wordt "
+        "doorgeschakeld bij geen antwoord, buiten openingstijden of altijd."
+    ),
+    key="ai_local_number",
+)
+
 
         st.metric("Beschikbare AI-belminuten", f"{ai_minutes} min")
         st.caption(
