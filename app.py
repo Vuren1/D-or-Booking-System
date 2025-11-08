@@ -893,17 +893,16 @@ def render_ai(company_id: int):
         st.markdown(
     """
     <style>
-    /* Altijd dezelfde gouden rand als de focus-styling
-       op de inner wrapper van elke st.text_area */
-    div[data-testid="stTextArea"] > div:nth-child(2) > div {
+    /* Altijd een gouden rand rond de zichtbare AI-tekstarea-container */
+    div[data-testid="stTextArea"] > div:nth-child(2) {
         box-shadow: 0 0 0 2px #d9a81e !important;
         border-radius: 12px !important;
         border: none !important;
-        background-color: #f7f7f7 !important;
+        background-color: #f7f7f7 !important;  /* zelfde grijze vak als nu */
     }
 
-    /* Bij focus niets veranderen: rand blijft identiek */
-    div[data-testid="stTextArea"] > div:nth-child(2) > div:focus-within {
+    /* Bij focus exact dezelfde stijl houden */
+    div[data-testid="stTextArea"] > div:nth-child(2):focus-within {
         box-shadow: 0 0 0 2px #d9a81e !important;
         border: none !important;
         outline: none !important;
@@ -912,6 +911,7 @@ def render_ai(company_id: int):
     """,
     unsafe_allow_html=True,
 )
+
 
     st.markdown("### AI-telefoniste instructies (optioneel)")
     st.caption(
