@@ -1284,7 +1284,9 @@ def upsert_reminder_settings(
 # =============================
 # MESSAGE BUNDLES & USAGE
 # =============================
+
 def ensure_message_balance(company_id: int):
+    """Zorg dat er een message_balances record bestaat voor deze company."""
     conn = get_connection()
     try:
         c = conn.cursor()
@@ -1301,30 +1303,37 @@ def ensure_message_balance(company_id: int):
 
 
 def get_message_balances(company_id: int) -> dict:
+    """Geef de huidige balans terug voor WhatsApp, SMS en e-mail."""
     ensure_message_balance(company_id)
     conn = get_connection()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT whatsapp_credits, sms_credits, email_limit, email_used
-        FROM message_balances
-        WHERE company_id=?
-        """,
-        (company_id,),
-    )
-    row = c.fetchone()
-    conn.close()
+    try:
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT whatsapp_credits, sms_credits, email_limit, email_used
+            FROM message_balances
+            WHERE company_id = ?
+            """,
+            (company_id,),
+        )
+        row = c.fetchone()
+    finally:
+        conn.close()
+
     if not row:
+        # Fallback defaults
         return dict(
             whatsapp_credits=0,
             sms_credits=0,
             email_limit=1000,
             email_used=0,
         )
+
     return dict(row)
 
 
 def add_whatsapp_credits(company_id: int, amount: int):
+    """Verhoog WhatsApp-tegoed."""
     ensure_message_balance(company_id)
     conn = get_connection()
     try:
@@ -1333,7 +1342,7 @@ def add_whatsapp_credits(company_id: int, amount: int):
             """
             UPDATE message_balances
             SET whatsapp_credits = whatsapp_credits + ?
-            WHERE company_id=?
+            WHERE company_id = ?
             """,
             (int(amount), company_id),
         )
@@ -1343,6 +1352,7 @@ def add_whatsapp_credits(company_id: int, amount: int):
 
 
 def add_sms_credits(company_id: int, amount: int):
+    """Verhoog SMS-tegoed."""
     ensure_message_balance(company_id)
     conn = get_connection()
     try:
@@ -1351,7 +1361,7 @@ def add_sms_credits(company_id: int, amount: int):
             """
             UPDATE message_balances
             SET sms_credits = sms_credits + ?
-            WHERE company_id=?
+            WHERE company_id = ?
             """,
             (int(amount), company_id),
         )
@@ -1361,6 +1371,7 @@ def add_sms_credits(company_id: int, amount: int):
 
 
 def add_email_limit(company_id: int, extra_limit: int):
+    """Verhoog de e-mail limiet."""
     ensure_message_balance(company_id)
     conn = get_connection()
     try:
@@ -1369,7 +1380,7 @@ def add_email_limit(company_id: int, extra_limit: int):
             """
             UPDATE message_balances
             SET email_limit = email_limit + ?
-            WHERE company_id=?
+            WHERE company_id = ?
             """,
             (int(extra_limit), company_id),
         )
@@ -1378,16 +1389,20 @@ def add_email_limit(company_id: int, extra_limit: int):
         conn.close()
 
 
-def register_message_usage(
-    company_id: int, msg_type: str, count: int = 1
-) -> bool:
+def register_message_usage(company_id: int, msg_type: str, count: int = 1) -> bool:
     """
-    Trek credits af (whatsapp/sms) of verhoog email_used.
-    Return False als er onvoldoende tegoed is.
-    Dit wordt door je scheduler / notificatie-service gebruikt.
+    Registreer verbruik:
+    - 'whatsapp' en 'sms' trekken credits af.
+    - 'email' verhoogt email_used (tot aan email_limit).
+
+    Retourneert:
+        True  -> succesvol geregistreerd
+        False -> onvoldoende tegoed / onbekend type
     """
     ensure_message_balance(company_id)
     msg_type = msg_type.lower()
+    count = int(count)
+
     conn = get_connection()
     try:
         c = conn.cursor()
@@ -1395,18 +1410,19 @@ def register_message_usage(
             """
             SELECT whatsapp_credits, sms_credits, email_limit, email_used
             FROM message_balances
-            WHERE company_id=?
+            WHERE company_id = ?
             """,
             (company_id,),
         )
         row = c.fetchone()
+
         if not row:
             return False
+
         wc = int(row["whatsapp_credits"])
         sc = int(row["sms_credits"])
         el = int(row["email_limit"])
         eu = int(row["email_used"])
-        count = int(count)
 
         if msg_type == "whatsapp":
             if wc < count:
@@ -1415,10 +1431,11 @@ def register_message_usage(
                 """
                 UPDATE message_balances
                 SET whatsapp_credits = whatsapp_credits - ?
-                WHERE company_id=?
+                WHERE company_id = ?
                 """,
                 (count, company_id),
             )
+
         elif msg_type == "sms":
             if sc < count:
                 return False
@@ -1426,10 +1443,11 @@ def register_message_usage(
                 """
                 UPDATE message_balances
                 SET sms_credits = sms_credits - ?
-                WHERE company_id=?
+                WHERE company_id = ?
                 """,
                 (count, company_id),
             )
+
         elif msg_type == "email":
             if eu + count > el:
                 return False
@@ -1437,71 +1455,30 @@ def register_message_usage(
                 """
                 UPDATE message_balances
                 SET email_used = email_used + ?
-                WHERE company_id=?
+                WHERE company_id = ?
                 """,
                 (count, company_id),
             )
+
         else:
             return False
 
         conn.commit()
         return True
+
     finally:
         conn.close()
 
 
 def get_message_usage_summary(company_id: int) -> dict:
-    """Gebruik voor UI: huidige credits + e-mail gebruik."""
-    return get_message_balances(company_id)
-def get_company_ai_settings(company_id: int) -> dict:
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT ai_assistant_enabled, ai_phone_number
-        FROM companies
-        WHERE id = ?
-        """,
-        (company_id,),
-    )
-    row = c.fetchone()
-    conn.close()
-
-    if not row:
-        return {"enabled": False, "phone_number": None}
-
-    return {
-        "enabled": bool(row["ai_assistant_enabled"]),
-        "phone_number": row["ai_phone_number"],
+    """
+    Simpele helper voor de UI:
+    Geeft dezelfde dict als get_message_balances:
+    {
+        "whatsapp_credits": int,
+        "sms_credits": int,
+        "email_limit": int,
+        "email_used": int,
     }
-
-
-def set_company_ai_enabled(company_id: int, enabled: bool):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute(
-        """
-        UPDATE companies
-        SET ai_assistant_enabled = ?
-        WHERE id = ?
-        """,
-        (1 if enabled else 0, company_id),
-    )
-    conn.commit()
-    conn.close()
-
-
-def set_company_ai_phone_number(company_id: int, phone_number: str | None):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute(
-        """
-        UPDATE companies
-        SET ai_phone_number = ?
-        WHERE id = ?
-        """,
-        (phone_number, company_id),
-    )
-    conn.commit()
-    conn.close()
+    """
+    return get_message_balances(company_id)
