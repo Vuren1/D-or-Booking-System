@@ -882,23 +882,45 @@ def render_ai(company_id: int):
         phone_to_save = local_number or None
         line_type_new = "standard"
 
-    # =============================
+        # =============================
     # AI-INSTRUCTIES
     # =============================
     st.markdown("### AI-telefoniste instructies (optioneel)")
+    st.caption(
+        "Personaliseer je assistente op maat van je bedrijf. "
+        "Je kan de voorbeeldtekst onderaan kopiëren, hier plakken en aanpassen met je eigen gegevens."
+    )
 
     ai_instructions_new = st.text_area(
-        "Beschrijf in je eigen woorden hoe de AI zich moet gedragen voor jouw bedrijf.",
+        "Instructies voor jouw AI-telefoniste",
         value=ai_instructions,
         placeholder=(
-            "Voorbeeld:\n"
-            "Je bent de telefoniste van Kapsalon Luna in Antwerpen. "
-            "Je spreekt vriendelijk en duidelijk Nederlands, zegt 'u'. "
-            "Je helpt bij het maken, verplaatsen en annuleren van afspraken. "
-            "Je vraagt altijd naar naam, telefoonnummer en reden van het bezoek."
+            "Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf. "
+            "Gebruik de voorbeeldtekst onderaan als basis en pas die aan."
         ),
         height=160,
         key="ai_instructions_input",
+    )
+
+    st.markdown(
+        "**Voorbeeldtekst** (kopieer en pas aan):\n"
+        "Je bent de telefoniste van **Kapsalon Luna** in **Antwerpen**. "
+        "Je spreekt vriendelijk en duidelijk Nederlands en gebruikt **'u'**. "
+        "Je helpt bij het maken, verplaatsen en annuleren van afspraken. "
+        "Je vraagt altijd naar **naam**, **telefoonnummer** en **reden van het bezoek**. "
+        "Je bevestigt elke afspraak kort en duidelijk en je geeft geen prijzen of info die je niet zeker weet."
+    )
+
+    st.markdown(
+        "**Ideeën wat je hier nog meer kunt toevoegen:**\n"
+        "- Taal & toon: formeel of informeel, 'u' of 'je'.\n"
+        "- Hoe je je bedrijf noemt aan de telefoon (bedrijfsnaam, merknaam, locatie).\n"
+        "- Welke diensten je aanbiedt en de standaard duur per dienst.\n"
+        "- Wat te doen bij volgeboekt: alternatief tijdstip voorstellen, wachtlijst, terugbelverzoek.\n"
+        "- Regels rond annuleren/no-shows (bijv. min. 24u op voorhand).\n"
+        "- Of de assistente **nooit prijzen mag verzinnen**: beter zeggen dat iemand van het team dit bevestigt.\n"
+        "- Of ze afspraken altijd moet herhalen ter bevestiging (datum, tijd, dienst, naam klant).\n"
+        "- Of ze bepaalde woorden/zinnen juist wél of juist niet mag gebruiken."
     )
 
     # =============================
