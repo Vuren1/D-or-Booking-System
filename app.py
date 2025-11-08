@@ -734,7 +734,9 @@ def render_ai(company_id: int):
         settings.get("enabled")
         or settings.get("ai_assistant_enabled", 0)
     )
+
     line_type = settings.get("ai_line_type") or "standard"  # 'standard' of 'premium'
+
     phone_number = (
         settings.get("phone_number")
         or settings.get("ai_phone_number")
@@ -767,6 +769,7 @@ def render_ai(company_id: int):
         "local": "Lokaal nummer (AI uit je minutenbundel)",
     }
     default_mode = "0900" if line_type == "premium" else "local"
+
     selected_mode = st.radio(
         "Kies hoe jouw AI-telefoniste bereikbaar is",
         options=["0900", "local"],
@@ -775,17 +778,18 @@ def render_ai(company_id: int):
         horizontal=True,
         key="ai_mode_choice",
     )
+
     use_premium = (selected_mode == "0900")
 
-    # Deze worden ingevuld per gekozen optie
-    phone_to_save = None
-    line_type_new = line_type
-    extra_min = 0  # alleen gebruikt bij lokaal nummer
+    # Waarden die per optie worden gezet
+    phone_to_save: str | None = None
+    line_type_new: str = line_type
+    extra_min: int = 0  # alleen gebruikt bij lokaal nummer
 
+    # =============================
+    # OPTIE 1: 0900-NUMMER
+    # =============================
     if use_premium:
-        # =============================
-        # OPTIE 1: 0900-NUMMER
-        # =============================
         st.markdown("### Optie 1: 0900-nummer")
 
         if enabled_new:
@@ -811,10 +815,10 @@ def render_ai(company_id: int):
         phone_to_save = number_0900 or None
         line_type_new = "premium"
 
-        else:
-        # =============================
-        # OPTIE 2: LOKAAL NUMMER
-        # =============================
+    # =============================
+    # OPTIE 2: LOKAAL NUMMER
+    # =============================
+    else:
         st.markdown("### Optie 2: Lokaal nummer")
 
         if enabled_new:
@@ -886,7 +890,7 @@ def render_ai(company_id: int):
     # AI-INSTRUCTIES
     # =============================
 
-    # Zorg dat de rand van dit tekstvak altijd zichtbaar is
+    # Rand van text area altijd tonen
     st.markdown(
         """
         <style>
@@ -932,11 +936,10 @@ def render_ai(company_id: int):
         "- Welke diensten je aanbiedt en de standaard duur per dienst.\n"
         "- Wat te doen bij volgeboekt: alternatief tijdstip voorstellen, wachtlijst, terugbelverzoek.\n"
         "- Regels rond annuleren/no-shows (bijv. min. 24u op voorhand).\n"
-        "- Of de assistente nooit prijzen mag verzinnen: beter zeggen dat iemand van het team dit bevestigt.\n"
+        "- Of de assistente nooit prijzen mag verzinnen: liever zeggen dat iemand van het team dit bevestigt.\n"
         "- Of ze afspraken altijd moet herhalen ter bevestiging (datum, tijd, dienst, naam klant).\n"
         "- Of ze bepaalde woorden/zinnen juist wél of juist niet mag gebruiken."
     )
-
 
     # =============================
     # SAFEGUARDS
@@ -1017,6 +1020,7 @@ def render_ai(company_id: int):
         "Optie 1 (0900): beller betaalt een vast tarief per minuut, jij hoeft geen AI-minuten te beheren. "
         "Optie 2 (lokaal nummer): gesprekken verbruiken minuten uit je bundel; je behoudt controle via bundels en safeguards."
     )
+
 
 
 def render_account(cid: int):
