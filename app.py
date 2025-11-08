@@ -70,6 +70,13 @@ init_db()
 # =============================
 # Helpers
 # =============================
+def _parse_time_str(value: str) -> dtime:
+    try:
+        h, m = str(value).split(":")
+        return dtime(int(h), int(m))
+    except Exception:
+        return dtime(9, 0)
+
 def _format_money(x) -> str:
     try:
         return f"€{float(x):.2f}".replace(".", ",")
@@ -423,35 +430,35 @@ def render_bookings(cid: int):
 def render_reminders(cid: int):
     st.markdown("## Herinneringen & meldingen")
 
-    # Huidige instellingen ophalen
     settings_df = get_reminder_settings(cid)
     if settings_df is None or settings_df.empty:
-        # Fallback defaults
-        settings = {
-            "active": 1,
-            "rem1_days_before": 1,
-            "rem1_time": "09:00",
-            "rem1_sms": 0,
-            "rem1_whatsapp": 1,
-            "rem1_email": 1,
-            "rem1_message_sms": "",
-            "rem1_message_whatsapp": "",
-            "rem1_message_email": "",
-            "rem2_minutes_before": 60,
-            "rem2_sms": 0,
-            "rem2_whatsapp": 0,
-            "rem2_email": 1,
-            "rem2_message_sms": "",
-            "rem2_message_whatsapp": "",
-            "rem2_message_email": "",
-        }
+        settings = {}
     else:
-        settings = settings_df.iloc[0]
+        settings = settings_df.iloc[0].to_dict()
+
+    # veilige defaults
+    active = bool(settings.get("active", 0))
+    rem1_days_before = int(settings.get("rem1_days_before", 1))
+    rem1_time_str = settings.get("rem1_time", "09:00")
+    rem1_sms = bool(settings.get("rem1_sms", 0))
+    rem1_whatsapp = bool(settings.get("rem1_whatsapp", 1))
+    rem1_email = bool(settings.get("rem1_email", 1))
+    rem1_message_sms = settings.get("rem1_message_sms") or ""
+    rem1_message_whatsapp = settings.get("rem1_message_whatsapp") or ""
+    rem1_message_email = settings.get("rem1_message_email") or ""
+
+    rem2_minutes_before = int(settings.get("rem2_minutes_before", 60))
+    rem2_sms = bool(settings.get("rem2_sms", 0))
+    rem2_whatsapp = bool(settings.get("rem2_whatsapp", 0))
+    rem2_email = bool(settings.get("rem2_email", 1))
+    rem2_message_sms = settings.get("rem2_message_sms") or ""
+    rem2_message_whatsapp = settings.get("rem2_message_whatsapp") or ""
+    rem2_message_email = settings.get("rem2_message_email") or ""
 
     # Globale schakelaar
     global_active = st.checkbox(
         "Herinneringen inschakelen",
-        value=bool(settings["active"]),
+        value=active,
         key="rem_global_active",
     )
 
@@ -459,171 +466,369 @@ def render_reminders(cid: int):
     st.markdown("### Herinnering 1 – dagen vóór de afspraak")
 
     col1, col2 = st.columns(2)
-    rem1_days_before = col1.number_input(
+    rem1_days_before_new = col1.number_input(
         "Aantal dagen vóór afspraak",
         min_value=0,
         max_value=365,
-        value=int(settings["rem1_days_before"]),
+        value=rem1_days_before,
         key="rem1_days_before_input",
     )
-def render_bundles_and_usage(cid: int):
+    rem1_time_new = col2.time_input(
+        "Verzendtijd",
+        value=_parse_time_str(rem1_time_str),
+        key="rem1_time_input",
+    )
+
+    ch1_col1, ch1_col2, ch1_col3 = st.columns(3)
+    rem1_sms_new = ch1_col1.checkbox(
+        "SMS",
+        value=rem1_sms,
+        key="rem1_sms_checkbox",
+    )
+    rem1_whatsapp_new = ch1_col2.checkbox(
+        "WhatsApp",
+        value=rem1_whatsapp,
+        key="rem1_whatsapp_checkbox",
+    )
+    rem1_email_new = ch1_col3.checkbox(
+        "E-mail",
+        value=rem1_email,
+        key="rem1_email_checkbox",
+    )
+
+    st.markdown("**Berichtteksten Herinnering 1**")
+    m1_sms_new = st.text_area(
+        "SMS tekst",
+        value=rem1_message_sms,
+        placeholder="Beste {klantnaam}, dit is een herinnering voor uw afspraak op {datum} om {tijd}.",
+        height=70,
+        key="rem1_message_sms_input",
+    )
+    m1_wa_new = st.text_area(
+        "WhatsApp tekst",
+        value=rem1_message_whatsapp,
+        placeholder="Beste {klantnaam}, we zien u graag op {datum} om {tijd}.",
+        height=70,
+        key="rem1_message_whatsapp_input",
+    )
+    m1_email_new = st.text_area(
+        "E-mail tekst",
+        value=rem1_message_email,
+        placeholder=(
+            "Beste {klantnaam},\n\n"
+            "Dit is een herinnering voor uw afspraak op {datum} om {tijd}.\n\n"
+            "Met vriendelijke groeten,\n{bedrijfsnaam}"
+        ),
+        height=110,
+        key="rem1_message_email_input",
+    )
+
+    st.markdown("---")
+    st.markdown("### Herinnering 2 – minuten vóór de afspraak (zelfde dag)")
+
+    col3, _ = st.columns(2)
+    rem2_minutes_before_new = col3.number_input(
+        "Aantal minuten vóór afspraak",
+        min_value=0,
+        max_value=1440,
+        value=rem2_minutes_before,
+        key="rem2_minutes_before_input",
+    )
+
+    ch2_col1, ch2_col2, ch2_col3 = st.columns(3)
+    rem2_sms_new = ch2_col1.checkbox(
+        "SMS",
+        value=rem2_sms,
+        key="rem2_sms_checkbox",
+    )
+    rem2_whatsapp_new = ch2_col2.checkbox(
+        "WhatsApp",
+        value=rem2_whatsapp,
+        key="rem2_whatsapp_checkbox",
+    )
+    rem2_email_new = ch2_col3.checkbox(
+        "E-mail",
+        value=rem2_email,
+        key="rem2_email_checkbox",
+    )
+
+    st.markdown("**Berichtteksten Herinnering 2**")
+    m2_sms_new = st.text_area(
+        "SMS tekst (zelfde dag)",
+        value=rem2_message_sms,
+        placeholder="Beste {klantnaam}, uw afspraak start om {tijd}. Tot zo!",
+        height=70,
+        key="rem2_message_sms_input",
+    )
+    m2_wa_new = st.text_area(
+        "WhatsApp tekst (zelfde dag)",
+        value=rem2_message_whatsapp,
+        placeholder="Hi {klantnaam}, een korte reminder: uw afspraak begint om {tijd}.",
+        height=70,
+        key="rem2_message_whatsapp_input",
+    )
+    m2_email_new = st.text_area(
+        "E-mail tekst (zelfde dag)",
+        value=rem2_message_email,
+        placeholder=(
+            "Beste {klantnaam},\n\n"
+            "Dit is een korte herinnering dat uw afspraak binnenkort start om {tijd}.\n\n"
+            "Met vriendelijke groeten,\n{bedrijfsnaam}"
+        ),
+        height=110,
+        key="rem2_message_email_input",
+    )
+
+    if st.button("Instellingen opslaan", type="primary", key="reminders_save_btn"):
+        ok = upsert_reminder_settings(
+            cid,
+            global_active,
+            int(rem1_days_before_new),
+            rem1_time_new.strftime("%H:%M"),
+            rem1_sms_new,
+            rem1_whatsapp_new,
+            rem1_email_new,
+            m1_sms_new,
+            m1_wa_new,
+            m1_email_new,
+            int(rem2_minutes_before_new),
+            rem2_sms_new,
+            rem2_whatsapp_new,
+            rem2_email_new,
+            m2_sms_new,
+            m2_wa_new,
+            m2_email_new,
+        )
+        if ok:
+            _success("Herinneringsinstellingen opgeslagen.")
+            st.rerun()
+        else:
+            _error("Kon instellingen niet opslaan.")
+
+    st.info(
+        "Deze instellingen bepalen timing, kanalen en teksten. "
+        "WhatsApp/SMS worden alleen verzonden als er voldoende bundeltegoed is "
+        "en je externe provider correct is gekoppeld."
+    )
+
+def render_bundles_and_usage(company_id: int):
     st.markdown("## Bundels & verbruik")
 
-    usage = get_message_usage_summary(cid) or {}
+    usage = get_message_usage_summary(company_id) or {}
     whatsapp_credits = int(usage.get("whatsapp_credits", 0))
     sms_credits = int(usage.get("sms_credits", 0))
     email_limit = int(usage.get("email_limit", 0))
     email_used = int(usage.get("email_used", 0))
     email_left = max(email_limit - email_used, 0)
 
+    ai_minutes = get_ai_local_minutes_balance(company_id)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("WhatsApp-tegoed", f"{whatsapp_credits}")
+    c2.metric("SMS-tegoed", f"{sms_credits}")
+    c3.metric("E-mail", f"{email_used} / {email_limit}", f"{email_left} over")
+    c4.metric("AI-belminuten", f"{ai_minutes} min")
+
+    st.caption(
+        "De bundels hieronder voegen in deze demo direct tegoed toe. "
+        "In productie koppel je dit aan je betaalprovider."
+    )
+
+    st.markdown("### Berichtbundels")
+
     col1, col2, col3 = st.columns(3)
-    col1.metric("WhatsApp-tegoed", f"{whatsapp_credits}")
-    col2.metric("SMS-tegoed", f"{sms_credits}")
-    col3.metric(
-        "E-mail verbruik",
-        f"{email_used} / {email_limit}",
-        help="Verzonden e-mails t.o.v. je limiet",
-    )
+    with col1:
+        st.markdown("**Starter**")
+        st.write("€15 · 500 WhatsApp · 500 SMS")
+        if st.button("Toevoegen", key="bundle_msg_starter"):
+            add_whatsapp_credits(company_id, 500)
+            add_sms_credits(company_id, 500)
+            _success("Starter bundel toegevoegd (demo).")
+            st.rerun()
 
-    st.markdown("### Handmatig tegoed toevoegen (admin/debug)")
+    with col2:
+        st.markdown("**Groei**")
+        st.write("€45 · 2.000 WhatsApp · 2.000 SMS")
+        if st.button("Toevoegen", key="bundle_msg_growth"):
+            add_whatsapp_credits(company_id, 2000)
+            add_sms_credits(company_id, 2000)
+            _success("Groei bundel toegevoegd (demo).")
+            st.rerun()
 
-    c1, c2, c3 = st.columns(3)
-    add_wa = c1.number_input(
-        "Extra WhatsApp-credits",
-        min_value=0,
-        step=10,
-        key="bundles_add_wa",
-    )
-    add_sms_val = c2.number_input(
-        "Extra SMS-credits",
-        min_value=0,
-        step=10,
-        key="bundles_add_sms",
-    )
-    add_email_val = c3.number_input(
-        "Extra e-mail limiet",
-        min_value=0,
-        step=100,
-        key="bundles_add_email",
-    )
+    with col3:
+        st.markdown("**E-mail**")
+        st.write("€19 · +10.000 e-mails")
+        if st.button("Toevoegen", key="bundle_email_10k"):
+            add_email_limit(company_id, 10_000)
+            _success("E-mail bundel toegevoegd (demo).")
+            st.rerun()
 
-    if st.button("Tegoed bijwerken", type="primary", key="bundles_save_btn"):
+    st.markdown("### AI-belminuten bundels")
+
+    ai_col1, ai_col2, ai_col3 = st.columns(3)
+    with ai_col1:
+        st.markdown("**AI 250**")
+        st.write("€25 · 250 AI-minuten")
+        if st.button("AI 250", key="bundle_ai_250"):
+            add_ai_local_minutes(company_id, 250)
+            _success("250 AI-minuten toegevoegd (demo).")
+            st.rerun()
+    with ai_col2:
+        st.markdown("**AI 500**")
+        st.write("€45 · 500 AI-minuten")
+        if st.button("AI 500", key="bundle_ai_500"):
+            add_ai_local_minutes(company_id, 500)
+            _success("500 AI-minuten toegevoegd (demo).")
+            st.rerun()
+    with ai_col3:
+        st.markdown("**AI 1000**")
+        st.write("€80 · 1.000 AI-minuten")
+        if st.button("AI 1000", key="bundle_ai_1000"):
+            add_ai_local_minutes(company_id, 1000)
+            _success("1.000 AI-minuten toegevoegd (demo).")
+            st.rerun()
+
+    st.markdown("### Handmatige correctie (alleen admin/debug)")
+
+    hc1, hc2, hc3, hc4 = st.columns(4)
+    add_wa = hc1.number_input("Extra WhatsApp", min_value=0, step=50, key="bundles_manual_wa")
+    add_sms_val = hc2.number_input("Extra SMS", min_value=0, step=50, key="bundles_manual_sms")
+    add_email_val = hc3.number_input("Extra e-mail limiet", min_value=0, step=1000, key="bundles_manual_email")
+    add_ai_val = hc4.number_input("Extra AI-minuten", min_value=0, step=50, key="bundles_manual_ai")
+
+    if st.button("Opslaan correcties", key="bundles_save_manual"):
         changed = False
-        if add_wa > 0:
-            add_whatsapp_credits(cid, int(add_wa))
+        if add_wa:
+            add_whatsapp_credits(company_id, int(add_wa))
             changed = True
-        if add_sms_val > 0:
-            add_sms_credits(cid, int(add_sms_val))
+        if add_sms_val:
+            add_sms_credits(company_id, int(add_sms_val))
             changed = True
-        if add_email_val > 0:
-            add_email_limit(cid, int(add_email_val))
+        if add_email_val:
+            add_email_limit(company_id, int(add_email_val))
+            changed = True
+        if add_ai_val:
+            add_ai_local_minutes(company_id, int(add_ai_val))
             changed = True
 
         if changed:
-            _success("Bundels bijgewerkt.")
+            _success("Tegoeden handmatig bijgewerkt.")
             st.rerun()
         else:
             _info("Geen wijzigingen om op te slaan.")
 
-    st.info(
-        "Deze pagina toont je huidige bundels en verbruik. "
-        "In productie kun je dit koppelen aan betalingen of automatische facturatie."
-    )
-def render_ai(cid: int):
+def render_ai(company_id: int):
     st.markdown("## AI Telefoniste / Callbot")
 
-    settings = get_company_ai_settings(cid) or {}
-
-    # Compatibel met beide varianten van get_company_ai_settings
-    enabled = bool(
-        settings.get("enabled")
-        or settings.get("ai_assistant_enabled", 0)
+    st.caption(
+        "De AI-telefoniste neemt de telefoon op, beantwoordt vragen en plant afspraken "
+        "op basis van jouw diensten en beschikbaarheid."
     )
+
+    settings = get_company_ai_settings(company_id) or {}
+
+    enabled = bool(settings.get("enabled") or settings.get("ai_assistant_enabled", 0))
     phone_number = (
         settings.get("phone_number")
         or settings.get("ai_phone_number")
         or ""
     )
+    line_type = settings.get("ai_line_type") or "standard"
+    guard_max_minutes = int(settings.get("ai_guard_max_minutes", 8) or 8)
+    guard_idle_seconds = int(settings.get("ai_guard_idle_seconds", 25) or 25)
+    guard_hangup_after_booking = bool(int(settings.get("ai_guard_hangup_after_booking", 1) or 1))
+    tariff_announce = bool(int(settings.get("ai_tariff_announce", 1) or 1))
 
-    line_type = settings.get("ai_line_type", "standard")
-    premium_rate_cents = int(settings.get("ai_premium_rate_cents") or 10)
-    guard_max_minutes = int(settings.get("ai_guard_max_minutes") or 8)
-    guard_idle_seconds = int(settings.get("ai_guard_idle_seconds") or 25)
-    guard_hangup_after_booking = bool(settings.get("ai_guard_hangup_after_booking", 1))
-    tariff_announce = bool(settings.get("ai_tariff_announce", 1))
+    ai_minutes = get_ai_local_minutes_balance(company_id)
+    premium_rate_cents = int(PREMIUM_AI_0900_RATE_EUR * 100)
 
-    col1, col2 = st.columns(2)
-    enabled_new = col1.checkbox(
-        "AI-telefoniste inschakelen",
-        value=enabled,
-        key="ai_enabled",
-    )
-    phone_new = col2.text_input(
-        "AI-telefoonnummer (virtueel/lokaal/0900)",
-        value=phone_number,
-        placeholder="+31..., +32..., 0900...",
-        key="ai_phone",
-    )
+    top_left, top_right = st.columns([2, 1])
+    with top_left:
+        enabled_new = st.checkbox(
+            "AI-telefoniste inschakelen",
+            value=enabled,
+            help="Als dit aanstaat, worden oproepen naar dit nummer door de AI afgehandeld.",
+            key="ai_enabled",
+        )
+        phone_new = st.text_input(
+            "AI-telefoonnummer (virtueel/lokaal/0900)",
+            value=phone_number,
+            placeholder="+31..., +32..., 0900...",
+            help="Bijvoorbeeld een virtueel nummer of 0900-nummer van je telco.",
+            key="ai_phone",
+        )
+    with top_right:
+        st.metric("Beschikbare AI-belminuten", f"{ai_minutes} min")
+        st.caption("AI-minuten kun je aanvullen via **Bundels & verbruik**.")
 
     st.markdown("### Lijntype & tarieven")
-    lt_col1, lt_col2 = st.columns(2)
-    line_type_new = lt_col1.selectbox(
-        "Type lijn",
-        options=["standard", "premium"],
-        index=0 if line_type == "standard" else 1,
-        format_func=lambda v: (
-            "Standaard (gewoon tarief)" if v == "standard"
-            else "Premium / 0900 (beller betaalt per minuut)"
-        ),
-        key="ai_line_type",
-    )
 
-    if line_type_new == "premium":
-        premium_rate_cents_new = lt_col2.number_input(
-            "Tarief per minuut (cent)",
-            min_value=0,
-            max_value=999,
-            value=premium_rate_cents,
-            step=5,
-            key="ai_premium_rate",
+    lt1, lt2 = st.columns([2, 3])
+    with lt1:
+        line_type_new = st.radio(
+            "Type lijn",
+            options=["standard", "premium"],
+            index=0 if line_type == "standard" else 1,
+            format_func=lambda v: (
+                "Standaard (beller betaalt normaal tarief)"
+                if v == "standard"
+                else "0900 / premium lijn"
+            ),
+            key="ai_line_type",
         )
-    else:
-        lt_col2.write("Beller betaalt enkel zijn eigen provider-tarief.")
-        premium_rate_cents_new = None
+
+    with lt2:
+        if line_type_new == "standard":
+            st.write(
+                "De beller betaalt enkel zijn normale belkosten. "
+                "Jij verbruikt AI-minuten uit je bundel."
+            )
+            premium_rate_to_store = None
+        else:
+            st.write(
+                f"0900-lijn actief. Vast tarief: **{_format_money(PREMIUM_AI_0900_RATE_EUR)} per minuut** "
+                "voor de beller. Dit tarief is standaard voor alle bedrijven."
+            )
+            premium_rate_to_store = premium_rate_cents
 
     st.markdown("### Veiligheidslimieten")
-    g1, g2, g3, g4 = st.columns(4)
-    max_minutes_new = g1.number_input(
-        "Max. gespreksduur (minuten)",
-        min_value=1,
-        max_value=60,
-        value=guard_max_minutes,
-        key="ai_guard_max_minutes",
-    )
-    idle_seconds_new = g2.number_input(
-        "Max. stilte (seconden)",
-        min_value=5,
-        max_value=300,
-        value=guard_idle_seconds,
-        key="ai_guard_idle_seconds",
-    )
-    hangup_new = g3.checkbox(
-        "Ophangen na succesvolle booking",
-        value=guard_hangup_after_booking,
-        key="ai_guard_hangup",
-    )
-    tariff_new = g4.checkbox(
-        "Tarief aankondigen bij start",
-        value=tariff_announce,
-        key="ai_tariff_announce",
-    )
 
-    st.markdown("### Lokale AI-minuten (optioneel)")
-    minutes_balance = get_ai_local_minutes_balance(cid)
-    st.metric("Beschikbare lokale AI-minuten", f"{minutes_balance} min")
+    g1, g2 = st.columns(2)
+    with g1:
+        max_minutes_new = st.slider(
+            "Max. gespreksduur (minuten)",
+            min_value=1,
+            max_value=30,
+            value=guard_max_minutes,
+            help="Na deze tijd verbreekt de AI automatisch het gesprek.",
+            key="ai_guard_max_minutes",
+        )
+    with g2:
+        idle_seconds_new = st.slider(
+            "Max. stilte (seconden)",
+            min_value=5,
+            max_value=120,
+            value=guard_idle_seconds,
+            help="Bij langere stilte verbreekt de AI het gesprek.",
+            key="ai_guard_idle_seconds",
+        )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        hangup_new = st.checkbox(
+            "Ophangen na succesvolle booking",
+            value=guard_hangup_after_booking,
+            key="ai_guard_hangup",
+        )
+    with c2:
+        tariff_new = st.checkbox(
+            "Tarief aankondigen bij start",
+            value=tariff_announce,
+            key="ai_tariff_announce",
+        )
 
     extra_min = st.number_input(
-        "Handmatig minuten toevoegen (admin/debug)",
+        "Handmatig minuten toevoegen (alleen admin/debug)",
         min_value=0,
         max_value=10000,
         step=50,
@@ -631,33 +836,32 @@ def render_ai(cid: int):
     )
 
     if st.button("AI-instellingen opslaan", type="primary", key="ai_save_btn"):
-        set_company_ai_enabled(cid, enabled_new)
-        set_company_ai_phone_number(cid, phone_new or None)
-        update_company_ai_line(
-            cid,
-            line_type=line_type_new,
-            premium_rate_cents=(
-                int(premium_rate_cents_new)
-                if line_type_new == "premium" and premium_rate_cents_new is not None
-                else None
-            ),
-        )
-        update_company_ai_safeguards(
-            cid,
-            max_minutes=int(max_minutes_new),
-            idle_seconds=int(idle_seconds_new),
-            hangup_after_booking=bool(hangup_new),
-            tariff_announce=bool(tariff_new),
-        )
-        if extra_min > 0:
-            add_ai_local_minutes(cid, int(extra_min))
+        try:
+            set_company_ai_enabled(company_id, enabled_new)
+            set_company_ai_phone_number(company_id, phone_new or None)
+            update_company_ai_line(
+                company_id,
+                line_type=line_type_new,
+                premium_rate_cents=premium_rate_to_store,
+            )
+            update_company_ai_safeguards(
+                company_id,
+                max_minutes=int(max_minutes_new),
+                idle_seconds=int(idle_seconds_new),
+                hangup_after_booking=bool(hangup_new),
+                tariff_announce=bool(tariff_new),
+            )
+            if extra_min > 0:
+                add_ai_local_minutes(company_id, int(extra_min))
 
-        _success("AI-instellingen opgeslagen.")
-        st.rerun()
+            _success("AI-instellingen opgeslagen.")
+            st.rerun()
+        except Exception as e:
+            _error(f"Opslaan mislukt: {e}")
 
     st.info(
-        "Hier beheer je je AI-telefoniste. Koppel dit in productie aan je belprovider/API "
-        "voor automatische nummerkoppeling en billing."
+        "Hier beheer je je AI-telefoniste. "
+        "In productie koppel je hier je VoIP-provider/0900-nummer en billing aan."
     )
 
     def _parse_time_str(value: str) -> dtime:
@@ -805,13 +1009,6 @@ def render_ai(cid: int):
         "en je externe provider correct is gekoppeld."
     )
     
-from database import (
-    get_company_ai_settings,
-    set_company_ai_enabled,
-    set_company_ai_phone_number,
-    update_company_ai_line,
-    update_company_ai_safeguards,
-)
 # als je ai_assistant.py al hebt:
 # from ai_assistant import provision_ai_number_for_company, release_ai_number_for_company
 
