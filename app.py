@@ -815,10 +815,10 @@ def render_ai(company_id: int):
         phone_to_save = number_0900 or None
         line_type_new = "premium"
 
-    # =============================
-    # OPTIE 2: LOKAAL NUMMER
-    # =============================
-    else:
+        else:
+        # =============================
+        # OPTIE 2: LOKAAL NUMMER
+        # =============================
         st.markdown("### Optie 2: Lokaal nummer")
 
         if enabled_new:
@@ -890,13 +890,12 @@ def render_ai(company_id: int):
     # AI-INSTRUCTIES
     # =============================
 
-    # Rand van text area altijd tonen
-            st.markdown(
+    st.markdown(
         """
         <style>
         /* Altijd een duidelijke gouden rand rond het AI-instructieveld */
         div[data-testid="stTextArea"] textarea {
-            border: 2px solid #d9a81e !important;  /* goud */
+            border: 2px solid #d9a81e !important;
             border-radius: 4px !important;
             box-shadow: none !important;
             outline: none !important;
@@ -914,7 +913,6 @@ def render_ai(company_id: int):
         unsafe_allow_html=True,
     )
 
-
     st.markdown("### AI-telefoniste instructies (optioneel)")
     st.caption(
         "Personaliseer je assistente op maat van je bedrijf. "
@@ -931,6 +929,8 @@ def render_ai(company_id: int):
         height=160,
         key="ai_instructions_input",
     )
+
+    # (voorbeeldtekst + ideeën blijven hierna staan)
 
     st.markdown(
         "**Voorbeeldtekst** (kopieer en pas aan):\n"
