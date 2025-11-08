@@ -627,23 +627,24 @@ def render_ai(cid: int):
     # Mapping:
     # - "standard" = 0900 AI-lijn (inbegrepen)
     # - "premium"  = Lokaal AI-nummer (betaalde add-on)
+    is_0900 = line_type == "standard"
+    is_local = line_type == "premium"
 
     st.markdown("## AI Telefoniste")
 
     st.markdown(
         """
 Met de **AI Telefoniste** laat je een digitale assistent de telefoon opnemen,
-vragen stellen zoals een echte medewerker, en direct afspraken boeken in je D’or systeem.
+vragen stellen zoals een echte medewerker en direct afspraken boeken in je D’or systeem.
         """
     )
 
     st.markdown("### Kies jouw AI-lijn")
 
-    # Huidige keuze naar label mappen
-    if line_type == "premium":
-        default_choice = "Lokaal AI-nummer (betaalde add-on)"
-    else:
-        default_choice = "0900 AI-lijn (inbegrepen)"
+    # Huidige keuze → label
+    default_choice = (
+        "Lokaal AI-nummer (betaalde add-on)" if is_local else "0900 AI-lijn (inbegrepen)"
+    )
 
     choice = st.radio(
         "Welke lijn wil je gebruiken?",
@@ -654,14 +655,13 @@ vragen stellen zoals een echte medewerker, en direct afspraken boeken in je D’
         index=0 if default_choice.startswith("0900") else 1,
         help=(
             "0900 AI-lijn: klant betaalt een klein bedrag per minuut, jij betaalt niets extra per gesprek.\n"
-            "Lokaal nummer: klant betaalt gewone belkosten, jij betaalt voor de AI-minuten via een add-on."
+            "Lokaal AI-nummer: klant belt een normaal nummer, jij betaalt de AI-minuten via een add-on."
         ),
         key=f"ai_line_choice_{cid}",
     )
 
     if st.button("Opslaan keuze AI-lijn", key=f"ai_save_line_{cid}"):
         if choice.startswith("0900"):
-            # 0900 = inbegrepen model
             update_company_ai_line(
                 cid,
                 "standard",
@@ -669,7 +669,6 @@ vragen stellen zoals een echte medewerker, en direct afspraken boeken in je D’
             )
             _success("AI-lijn ingesteld op 0900 (inbegrepen).")
         else:
-            # Lokaal nummer = betaalde add-on
             update_company_ai_line(
                 cid,
                 "premium",
@@ -678,7 +677,7 @@ vragen stellen zoals een echte medewerker, en direct afspraken boeken in je D’
             _success("AI-lijn ingesteld op lokaal nummer (betaalde add-on).")
         st.rerun()
 
-    # Herbereken line_type na mogelijke wijziging
+    # Reload settings na eventuele wijziging
     settings = get_company_ai_settings(cid)
     line_type = (settings.get("ai_line_type") or "standard").strip()
     enabled = bool(settings.get("enabled", False))
@@ -688,15 +687,15 @@ vragen stellen zoals een echte medewerker, en direct afspraken boeken in je D’
 
     st.markdown("---")
 
-    # =========================
-    # 1) 0900 AI-lijn (inbegrepen)
-    # =========================
+    # ====================================================
+    # 1) 0900 AI-lijn (inbegrepen voor iedereen)
+    # ====================================================
     if is_0900:
         st.markdown("### 0900 AI-lijn (inbegrepen)")
 
         st.markdown(
             f"""
-Met de 0900 AI-lijn kun je **gratis** gebruikmaken van de AI Telefoniste:
+Met de 0900 AI-lijn kun je **zonder extra maandelijkse kosten** gebruikmaken van de AI Telefoniste:
 
 - Jij betaalt geen kosten per minuut voor AI-gesprekken.
 - De beller betaalt een duidelijk tarief van **€{PREMIUM_AI_0900_RATE_EUR:.2f} per minuut** via zijn provider.
@@ -704,9 +703,9 @@ Met de 0900 AI-lijn kun je **gratis** gebruikmaken van de AI Telefoniste:
   - Tariefmelding aan het begin van elk gesprek
   - Automatisch afronden zodra de afspraak is ingepland
   - Maximale gespreksduur om onnodig lange gesprekken te voorkomen
-  - Automatische beëindiging bij stilte (om kosten voor je klant te beschermen)
+  - Automatische beëindiging bij stilte (om kosten voor je klant te beperken)
 
-Deze instellingen zijn standaard en kunnen niet worden uitgezet.
+Deze instellingen zijn standaard voor alle 0900-lijnen en kunnen niet worden uitgezet.
 Zo weet jij zeker dat je klanten eerlijk behandeld worden en je geen verrassingen hebt.
             """
         )
@@ -716,6 +715,10 @@ Zo weet jij zeker dat je klanten eerlijk behandeld worden en je geen verrassinge
 
             if phone_number:
                 st.markdown(f"**Jouw 0900 AI-nummer:** `{phone_number}`")
+                st.caption(
+                    "Deel dit nummer met je klanten of plaats het op je website. "
+                    "Zij betalen het 0900-tarief; jij niet."
+                )
             else:
                 st.info(
                     "Er is nog geen 0900-nummer gekoppeld. Dit nummer wordt technisch nog aan je account toegevoegd."
@@ -740,7 +743,7 @@ Zo weet jij zeker dat je klanten eerlijk behandeld worden en je geen verrassinge
                 key=f"ai_enable_0900_{cid}",
                 type="primary",
             ):
-                # Hier later: 0900-nummer provisionen en opslaan via set_company_ai_phone_number(...)
+                # TODO: hier later 0900-nummer provisionen en opslaan
                 set_company_ai_enabled(cid, True)
                 _success(
                     "AI Telefoniste via 0900 is geactiveerd. "
@@ -748,9 +751,38 @@ Zo weet jij zeker dat je klanten eerlijk behandeld worden en je geen verrassinge
                 )
                 st.rerun()
 
-    # =========================
-    # 2) Lokaal AI-nummer (add-on)
-    # =========================
+        # -------- Info blok over Lokaal nummer add-on --------
+        st.markdown("---")
+        st.markdown("### Liever een normaal lokaal nummer?")
+
+        st.markdown(
+            f"""
+Met de **AI Lokaal Nummer add-on** gebruik je een normaal telefoonnummer in plaats van 0900:
+
+- Klanten bellen een lokaal nummer (geen servicenummer).
+- Inclusief **{LOCAL_AI_INCLUDED_MINUTES} AI-belminuten** per maand.
+- Extra minuten: **€{LOCAL_AI_EXTRA_RATE_EUR:.2f} per minuut**.
+- Jij kunt zelf safeguards instellen (maximale duur, stilte-timeout, afsluiten na boeking).
+
+**Huidige status:** Lokaal AI-nummer add-on is nog niet geactiveerd.
+            """
+        )
+
+        if st.button(
+            "Bekijk / activeer Lokaal AI-nummer add-on",
+            key=f"ai_go_local_from_0900_{cid}",
+        ):
+            # Switch naar lokale lijn-config (nog zonder nummer), daarna ziet gebruiker onderstaand blok
+            update_company_ai_line(cid, "premium", None)
+            _success(
+                "Je hebt gekozen voor de Lokaal AI-nummer add-on. "
+                "Scroll omlaag om de instellingen te voltooien."
+            )
+            st.rerun()
+
+    # ====================================================
+    # 2) Lokaal AI-nummer (betaalde add-on)
+    # ====================================================
     if is_local:
         st.markdown("### Lokaal AI-nummer (betaalde add-on)")
 
@@ -759,20 +791,24 @@ Zo weet jij zeker dat je klanten eerlijk behandeld worden en je geen verrassinge
 Deze optie is voor bedrijven die géén 0900-nummer willen gebruiken:
 
 - Klanten bellen een normaal lokaal nummer (geen 0900).
-- Jij neemt de AI-kosten op je via een add-on.
-- Voorstel structuur (aanpasbaar door jou als aanbieder):
+- Jij betaalt de AI-minuten via deze add-on.
+- Indicatieve structuur:
   - **€49 / maand** per bedrijf
-  - Incl. **{LOCAL_AI_INCLUDED_MINUTES} AI-belminuten**
+  - Inclusief **{LOCAL_AI_INCLUDED_MINUTES} AI-belminuten**
   - Extra minuten: **€{LOCAL_AI_EXTRA_RATE_EUR:.2f} per minuut**
-- Minuten blijven geldig zolang je account actief is.
-
-Omdat jij hier de minuten betaalt, krijg je **meer controle** via instelbare safeguards.
+- Minuten blijven geldig zolang je D’or account actief is.
             """
         )
 
-        st.markdown("#### Safeguards voor lokaal nummer (instelbaar)")
+        # Placeholder bundel-overzicht (tot je echte usage-tracking hebt)
+        st.markdown("#### Bundel & verbruik")
+        st.metric("Beschikbare AI-minuten", "0 min", help="Integratie met je echte verbruik volgt nog.")
+        st.caption(
+            "Zodra je bundel- en verbruiksregistratie is gekoppeld, zie je hier precies hoeveel AI-minuten nog beschikbaar zijn."
+        )
 
-        # Huidige waarden of defaults
+        st.markdown("#### Safeguards (instelbaar voor lokaal nummer)")
+
         max_cur = settings.get("ai_guard_max_minutes") or 10
         idle_cur = settings.get("ai_guard_idle_seconds") or 30
         hangup_cur = bool(settings.get("ai_guard_hangup_after_booking", 1))
@@ -783,7 +819,7 @@ Omdat jij hier de minuten betaalt, krijg je **meer controle** via instelbare saf
             min_value=5,
             max_value=30,
             value=int(max_cur) if 5 <= int(max_cur) <= 30 else 10,
-            help="Beschermt tegen extreem lange gesprekken, maar laat genoeg tijd voor normale afspraken.",
+            help="Beschermt tegen extreem lange gesprekken, maar laat genoeg tijd voor normale hulp.",
             key=f"ai_max_minutes_{cid}",
         )
 
@@ -792,7 +828,7 @@ Omdat jij hier de minuten betaalt, krijg je **meer controle** via instelbare saf
             min_value=10,
             max_value=90,
             value=int(idle_cur) if 10 <= int(idle_cur) <= 90 else 30,
-            help="Bij stilte verbreekt de AI netjes het gesprek om onnodige kosten te voorkomen.",
+            help="Bij stilte verbreekt de AI het gesprek om onnodige kosten te voorkomen.",
             key=f"ai_idle_seconds_{cid}",
         )
 
@@ -806,7 +842,7 @@ Omdat jij hier de minuten betaalt, krijg je **meer controle** via instelbare saf
             "Tarief / voorwaarden melden aan het begin",
             value=tariff_cur,
             key=f"ai_tariff_announce_{cid}",
-            help="Aanbevolen voor transparantie richting je klanten.",
+            help="Aanbevolen voor maximale transparantie.",
         )
 
         if st.button("Safeguards opslaan", key=f"ai_save_guards_local_{cid}"):
@@ -826,6 +862,7 @@ Omdat jij hier de minuten betaalt, krijg je **meer controle** via instelbare saf
             st.success("AI Telefoniste met lokaal nummer is **geactiveerd** voor dit bedrijf.")
             if phone_number:
                 st.markdown(f"**Jouw lokale AI-nummer:** `{phone_number}`")
+                st.caption("Gebruik dit nummer in je communicatie; klanten betalen alleen normale belkosten.")
             else:
                 st.info(
                     "Er is nog geen lokaal nummer gekoppeld. "
@@ -844,14 +881,14 @@ Omdat jij hier de minuten betaalt, krijg je **meer controle** via instelbare saf
         else:
             st.info(
                 "De lokale AI-lijn is een betaalde add-on. "
-                "Je klanten bellen een normaal nummer, jij betaalt de AI-minuten."
+                "Activeer hieronder om een lokaal AI-nummer en minutenbundel te gebruiken."
             )
             if st.button(
                 "AI Telefoniste met lokaal nummer activeren",
                 key=f"ai_enable_local_{cid}",
                 type="primary",
             ):
-                # Hier later: lokaal nummer provisionen en opslaan via set_company_ai_phone_number(...)
+                # TODO: hier later lokaal nummer provisionen en bundel koppelen
                 set_company_ai_enabled(cid, True)
                 _success(
                     "AI Telefoniste met lokaal nummer is geactiveerd. "
