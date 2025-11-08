@@ -793,7 +793,7 @@ def render_ai(company_id: int):
         st.markdown("### Optie 1: 0900-nummer")
 
         if enabled_new:
-            st.success("Deze optie is actief zodra je hieronder je 0900-nummer instelt.")
+            st.success("Deze optie is momenteel actief.")
         else:
             st.warning("Je hebt 0900 geselecteerd, maar de AI-telefoniste staat uit.")
 
@@ -815,10 +815,10 @@ def render_ai(company_id: int):
         phone_to_save = number_0900 or None
         line_type_new = "premium"
 
-        else:
-        # =============================
-        # OPTIE 2: LOKAAL NUMMER
-        # =============================
+    # =============================
+    # OPTIE 2: LOKAAL NUMMER
+    # =============================
+    else:
         st.markdown("### Optie 2: Lokaal nummer")
 
         if enabled_new:
@@ -887,7 +887,7 @@ def render_ai(company_id: int):
         line_type_new = "standard"
 
     # =============================
-    # AI-INSTRUCTIES
+    # AI-INSTRUCTIES (met vaste gouden rand)
     # =============================
 
     st.markdown(
@@ -929,8 +929,6 @@ def render_ai(company_id: int):
         height=160,
         key="ai_instructions_input",
     )
-
-    # (voorbeeldtekst + ideeën blijven hierna staan)
 
     st.markdown(
         "**Voorbeeldtekst** (kopieer en pas aan):\n"
@@ -1032,7 +1030,6 @@ def render_ai(company_id: int):
         "Optie 1 (0900): beller betaalt een vast tarief per minuut, jij hoeft geen AI-minuten te beheren. "
         "Optie 2 (lokaal nummer): gesprekken verbruiken minuten uit je bundel; je behoudt controle via bundels en safeguards."
     )
-
 
 
 def render_account(cid: int):
