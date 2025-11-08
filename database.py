@@ -59,11 +59,14 @@ def init_db():
     for ddl in [
         "ALTER TABLE companies ADD COLUMN slug TEXT UNIQUE",
         "ALTER TABLE companies ADD COLUMN logo_path TEXT",
+        "ALTER TABLE companies ADD COLUMN ai_assistant_enabled INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE companies ADD COLUMN ai_phone_number TEXT",
     ]:
         try:
             c.execute(ddl)
         except Exception:
             pass
+
 
     # Slugs invullen voor bestaande bedrijven
     try:
@@ -82,6 +85,7 @@ def init_db():
             c.execute("UPDATE companies SET slug=? WHERE id=?", (slug, cid))
     except Exception:
         pass
+
 
     # ---------------- Categories ----------------
     c.execute(
