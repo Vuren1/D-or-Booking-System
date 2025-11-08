@@ -773,11 +773,10 @@ def render_ai(company_id: int):
         horizontal=True,
         key="ai_mode_choice",
     )
-    use_premium = selected_mode == "0900"
+    use_premium = (selected_mode == "0900")
 
     # We tonen slechts 1 blok: de gekozen optie
-
-    extra_min = 0  # default, alleen gebruikt bij lokaal nummer
+    extra_min = 0  # alleen gebruikt bij lokaal nummer
 
     if use_premium:
         # =============================
@@ -808,7 +807,7 @@ def render_ai(company_id: int):
         phone_to_save = number_0900 or None
         line_type_new = "premium"
 
-        else:
+    else:
         # =============================
         # OPTIE 2: LOKAAL NUMMER
         # =============================
