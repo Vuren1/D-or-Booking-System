@@ -55,20 +55,14 @@ def init_db():
         )
         """
     )
-        # migreer kolommen indien ontbreken
+            # migreer kolommen indien ontbreken
     for ddl in [
         "ALTER TABLE companies ADD COLUMN slug TEXT UNIQUE",
         "ALTER TABLE companies ADD COLUMN logo_path TEXT",
         "ALTER TABLE companies ADD COLUMN ai_assistant_enabled INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE companies ADD COLUMN ai_phone_number TEXT",
-
-        -- AI-lijn type: 'standard' of 'premium'
         "ALTER TABLE companies ADD COLUMN ai_line_type TEXT NOT NULL DEFAULT 'standard'",
-
-        -- premium tarief in cent per minuut (bijv 10 = €0,10)
         "ALTER TABLE companies ADD COLUMN ai_premium_rate_cents INTEGER",
-
-        -- safeguards
         "ALTER TABLE companies ADD COLUMN ai_guard_max_minutes INTEGER",
         "ALTER TABLE companies ADD COLUMN ai_guard_idle_seconds INTEGER",
         "ALTER TABLE companies ADD COLUMN ai_guard_hangup_after_booking INTEGER",
@@ -78,6 +72,7 @@ def init_db():
             c.execute(ddl)
         except Exception:
             pass
+
 
     # Slugs invullen voor bestaande bedrijven
     try:
@@ -96,7 +91,6 @@ def init_db():
             c.execute("UPDATE companies SET slug=? WHERE id=?", (slug, cid))
     except Exception:
         pass
-
 
     # ---------------- Categories ----------------
     c.execute(
