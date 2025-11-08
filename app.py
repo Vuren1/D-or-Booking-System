@@ -893,17 +893,18 @@ def render_ai(company_id: int):
         st.markdown(
     """
     <style>
-    /* Altijd een gouden rand rond de zichtbare AI-tekstarea-container */
-    div[data-testid="stTextArea"] > div:nth-child(2) {
+    /* Vast gouden randje rond alleen het AI-instructieveld */
+    textarea[aria-label="Instructies voor jouw AI-telefoniste"] {
         box-shadow: 0 0 0 2px #d9a81e !important;
         border-radius: 12px !important;
         border: none !important;
-        background-color: #f7f7f7 !important;  /* zelfde grijze vak als nu */
+        outline: none !important;
+        background-color: #f7f7f7 !important;
+        padding: 18px 24px !important;
     }
 
-    /* Bij focus exact dezelfde stijl houden */
-    div[data-testid="stTextArea"] > div:nth-child(2):focus-within {
-        box-shadow: 0 0 0 2px #d9a81e !important;
+    textarea[aria-label="Instructies voor jouw AI-telefoniste"]:focus {
+        box-shadow: 0 0 0 2px #d9a81e !important;  /* zelfde rand bij focus */
         border: none !important;
         outline: none !important;
     }
@@ -912,7 +913,6 @@ def render_ai(company_id: int):
     unsafe_allow_html=True,
 )
 
-
     st.markdown("### AI-telefoniste instructies (optioneel)")
     st.caption(
         "Personaliseer je assistente op maat van je bedrijf. "
@@ -920,15 +920,14 @@ def render_ai(company_id: int):
     )
 
     ai_instructions_new = st.text_area(
-        "Instructies voor jouw AI-telefoniste",
-        value=ai_instructions,
-        placeholder=(
-            "Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf. "
-            "Gebruik de voorbeeldtekst onderaan als basis en pas die aan."
-        ),
-        height=160,
-        key="ai_instructions_input",
-    )
+    "Instructies voor jouw AI-telefoniste",
+    value=ai_instructions,
+    placeholder=(
+        "Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf. "
+        "Gebruik de voorbeeldtekst onderaan als basis en pas die aan."
+    ),
+)
+
 
     st.markdown(
         "**Voorbeeldtekst** (kopieer en pas aan):\n"
