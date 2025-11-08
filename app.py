@@ -52,6 +52,7 @@ from database import (
 
 APP_LOGO_URL = os.getenv("APP_LOGO_URL", "")
 
+
 st.set_page_config(
     page_title="D’or Booking System",
     page_icon="💫",
@@ -719,12 +720,11 @@ Zo weet jij zeker dat je klanten eerlijk behandeld worden en je geen verrassinge
             if phone_number:
                 st.markdown(f"**Jouw 0900 AI-nummer:** `{phone_number}`")
                 st.caption(
-                    "Deel dit nummer met je klanten of plaats het op je website. "
-                    "Zij betalen het 0900-tarief; jij niet."
+                    "Deel dit nummer met je klanten of plaats het op je website."
                 )
             else:
                 st.info(
-                    "Er is nog geen 0900-nummer gekoppeld. Dit nummer wordt technisch nog aan je account toegevoegd."
+                    "Er is nog geen 0900-nummer gekoppeld. Dit nummer wordt later technisch toegevoegd."
                 )
 
             if st.button(
@@ -746,7 +746,6 @@ Zo weet jij zeker dat je klanten eerlijk behandeld worden en je geen verrassinge
                 key=f"ai_enable_0900_{cid}",
                 type="primary",
             ):
-                # TODO: 0900-nummer provisionen en opslaan
                 set_company_ai_enabled(cid, True)
                 _success(
                     "AI Telefoniste via 0900 is geactiveerd. "
@@ -754,7 +753,7 @@ Zo weet jij zeker dat je klanten eerlijk behandeld worden en je geen verrassinge
                 )
                 st.rerun()
 
-        # --- Promo blok voor lokaal nummer add-on ---
+        # Promo blok voor lokaal nummer add-on
         st.markdown("---")
         st.markdown("### Liever een normaal lokaal nummer?")
 
@@ -795,9 +794,9 @@ Met de **AI Lokaal Nummer add-on** gebruik je een normaal telefoonnummer in plaa
             f"""
 Met het **Lokaal AI-nummer** kies je voor maximale klantvriendelijkheid:
 
-- Klanten bellen een normaal lokaal nummer (geen 0900).
+- Klanten bellen een normaal lokaal nummer.
 - Jij betaalt voor de AI-minuten via bundels.
-- Startbundel voorstel:
+- Startbundel:
   - **{LOCAL_AI_INCLUDED_MINUTES} minuten voor €{bundle_price:.2f}**
   - Extra minuten: **€{LOCAL_AI_EXTRA_RATE_EUR:.2f} per minuut**
 - Minuten blijven geldig zolang je D’or account actief is.
@@ -829,7 +828,7 @@ Met het **Lokaal AI-nummer** kies je voor maximale klantvriendelijkheid:
             )
             st.rerun()
 
-        st.markdown("*(Integratie met echte betaalflow / facturatie volgt in de backend.)*")
+        st.markdown("*(Koppeling met echte betaalflow/facturatie volgt technisch in de backend.)*")
 
         # Safeguards instelbaar
         st.markdown("#### Safeguards (voor lokaal nummer)")
@@ -844,7 +843,6 @@ Met het **Lokaal AI-nummer** kies je voor maximale klantvriendelijkheid:
             min_value=5,
             max_value=30,
             value=int(max_cur) if 5 <= int(max_cur) <= 30 else 10,
-            help="Beschermt tegen extreem lange gesprekken.",
             key=f"ai_max_minutes_{cid}",
         )
 
@@ -853,7 +851,6 @@ Met het **Lokaal AI-nummer** kies je voor maximale klantvriendelijkheid:
             min_value=10,
             max_value=90,
             value=int(idle_cur) if 10 <= int(idle_cur) <= 90 else 30,
-            help="Bij stilte verbreekt de AI netjes het gesprek.",
             key=f"ai_idle_seconds_{cid}",
         )
 
@@ -867,7 +864,6 @@ Met het **Lokaal AI-nummer** kies je voor maximale klantvriendelijkheid:
             "Voorwaarden / tarief melden aan het begin",
             value=tariff_cur,
             key=f"ai_tariff_announce_{cid}",
-            help="Aanbevolen voor maximale transparantie.",
         )
 
         if st.button("Safeguards opslaan", key=f"ai_save_guards_local_{cid}"):
@@ -889,12 +885,9 @@ Met het **Lokaal AI-nummer** kies je voor maximale klantvriendelijkheid:
             )
             if phone_number:
                 st.markdown(f"**Jouw lokale AI-nummer:** `{phone_number}`")
-                st.caption(
-                    "Gebruik dit nummer in je communicatie; klanten betalen alleen normale belkosten."
-                )
             else:
                 st.info(
-                    "Er is nog geen lokaal nummer gekoppeld. Dit wordt technisch nog aan je account toegevoegd."
+                    "Er is nog geen lokaal nummer gekoppeld. Dit wordt later technisch toegevoegd."
                 )
 
             if st.button(
