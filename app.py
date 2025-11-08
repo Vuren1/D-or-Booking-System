@@ -725,13 +725,14 @@ def render_ai(company_id: int):
         "op basis van jouw diensten en beschikbaarheid."
     )
 
+    # Huidige instellingen ophalen
     settings = get_company_ai_settings(company_id) or {}
 
     enabled = bool(
         settings.get("enabled")
         or settings.get("ai_assistant_enabled", 0)
     )
-    line_type = settings.get("ai_line_type") or "standard"
+    line_type = settings.get("ai_line_type") or "standard"  # 'standard' of 'premium'
     phone_number = (
         settings.get("phone_number")
         or settings.get("ai_phone_number")
@@ -758,102 +759,117 @@ def render_ai(company_id: int):
         key="ai_enabled",
     )
 
-    # 2. Keuze tussen 0900 of lokaal nummer
+    # 2. Kies optie: 0900 of lokaal nummer
     mode_labels = {
         "0900": "0900-nummer (beller betaalt, AI inbegrepen)",
         "local": "Lokaal nummer (AI uit je minutenbundel)",
     }
+    default_mode = "0900" if line_type == "premium" else "local"
     selected_mode = st.radio(
         "Kies hoe jouw AI-telefoniste bereikbaar is",
         options=["0900", "local"],
-        index=0 if line_type == "premium" else 1,
+        index=0 if default_mode == "0900" else 1,
         format_func=lambda v: mode_labels[v],
         horizontal=True,
         key="ai_mode_choice",
     )
     use_premium = selected_mode == "0900"
 
-    # ========== OPTIE 1: 0900 ==========
-    st.markdown("### Optie 1: 0900-nummer")
+    # We tonen slechts 1 blok: de gekozen optie
 
-    if enabled_new and use_premium:
-        st.success("Deze optie is momenteel actief.")
-    elif use_premium and not enabled_new:
-        st.warning("Je hebt deze optie geselecteerd, maar de AI-telefoniste staat uit.")
-    else:
-        st.caption(
-            "Niet actief. Kies hierboven '0900-nummer (beller betaalt, AI inbegrepen)' "
-            "én schakel de AI in om deze optie te gebruiken."
+    extra_min = 0  # default, alleen gebruikt bij lokaal nummer
+
+    if use_premium:
+        # =============================
+        # OPTIE 1: 0900-NUMMER
+        # =============================
+        st.markdown("### Optie 1: 0900-nummer")
+
+        if enabled_new:
+            st.success("Deze optie is actief zodra je hieronder je 0900-nummer instelt.")
+        else:
+            st.warning("Je hebt 0900 geselecteerd, maar de AI-telefoniste staat uit.")
+
+        number_0900 = st.text_input(
+            "Jouw 0900-nummer om te delen met klanten",
+            value=phone_number if line_type == "premium" else "",
+            placeholder="0900-....",
+            help="Dit nummer deel je met klanten. Oproepen hierop gaan naar de AI-telefoniste.",
+            key="ai_0900_number",
         )
 
-    number_0900 = st.text_input(
-        "Jouw 0900-nummer om te delen met klanten",
-        value=phone_number if use_premium else "",
-        placeholder="0900-....",
-        help="Dit nummer deel je met klanten. Oproepen hierop gaan naar de AI-telefoniste.",
-        key="ai_0900_number",
-    )
+        st.write(
+            f"- Vast tarief voor de beller: **{_format_money(PREMIUM_AI_0900_RATE_EUR)} per minuut**."
+        )
+        st.write("- Tarief is standaard voor alle bedrijven en niet aanpasbaar.")
+        st.write("- De kosten van de AI zijn hiermee gedekt; je hoeft geen AI-minutenbundels te kopen.")
+        st.write("- Ideaal als je kosten wilt doorbelasten aan de beller.")
 
-    st.write(
-        f"- Vast tarief voor de beller: **{_format_money(PREMIUM_AI_0900_RATE_EUR)} per minuut**."
-    )
-    st.write("- Tarief is standaard voor alle bedrijven en niet aanpasbaar.")
-    st.write("- De kosten van de AI zijn hiermee gedekt; jij koopt geen AI-minutenbundels.")
-    st.write("- Ideaal als je kosten wilt doorbelasten aan de beller.")
+        phone_to_save = number_0900 or None
+        line_type_new = "premium"
+
+    else:
+        # =============================
+        # OPTIE 2: LOKAAL NUMMER
+        # =============================
+        st.markdown("### Optie 2: Lokaal nummer")
+
+        if enabled_new:
+            st.success("Deze optie is actief zodra je hieronder je lokale nummer instelt.")
+        else:
+            st.warning("Je hebt lokaal nummer geselecteerd, maar de AI-telefoniste staat uit.")
+
+        local_number = st.text_input(
+            "Jouw lokale AI-nummer",
+            value=phone_number if line_type != "premium" else "",
+            placeholder="+31..., +32...",
+            help="Bijvoorbeeld een regionaal nummer dat je via je provider naar de AI doorschakelt.",
+            key="ai_local_number",
+        )
+
+        st.metric("Beschikbare AI-belminuten", f"{ai_minutes} min")
+        st.caption(
+            "Oproepen naar dit nummer verbruiken AI-minuten uit je bundel. "
+            "Is je bundel leeg, dan neemt de AI niet meer op tot je aanvult."
+        )
+
+        st.markdown("**AI-minuten bundels (demo)**")
+        b1, b2, b3 = st.columns(3)
+        with b1:
+            st.write("€25 · 250 min")
+            if st.button("Koop 250 min", key="ai_bundle_250"):
+                add_ai_local_minutes(company_id, 250)
+                _success("250 AI-minuten toegevoegd (demo).")
+                st.rerun()
+        with b2:
+            st.write("€45 · 500 min")
+            if st.button("Koop 500 min", key="ai_bundle_500"):
+                add_ai_local_minutes(company_id, 500)
+                _success("500 AI-minuten toegevoegd (demo).")
+                st.rerun()
+        with b3:
+            st.write("€80 · 1.000 min")
+            if st.button("Koop 1.000 min", key="ai_bundle_1000"):
+                add_ai_local_minutes(company_id, 1000)
+                _success("1.000 AI-minuten toegevoegd (demo).")
+                st.rerun()
+
+        extra_min = st.number_input(
+            "Handmatig AI-minuten toevoegen (alleen admin/debug)",
+            min_value=0,
+            max_value=10000,
+            step=50,
+            key="ai_add_minutes",
+        )
+
+        phone_to_save = local_number or None
+        line_type_new = "standard"
 
     st.markdown("---")
 
-    # ========== OPTIE 2: LOKAAL ==========
-    st.markdown("### Optie 2: Lokaal nummer")
-
-    if enabled_new and not use_premium:
-        st.success("Deze optie is momenteel actief.")
-    elif (not use_premium) and not enabled_new:
-        st.warning("Je hebt deze optie geselecteerd, maar de AI-telefoniste staat uit.")
-    else:
-        st.caption(
-            "Niet actief. Kies hierboven 'Lokaal nummer (AI uit je minutenbundel)' "
-            "én schakel de AI in om deze optie te gebruiken."
-        )
-
-    local_number = st.text_input(
-        "Jouw lokale AI-nummer",
-        value=phone_number if not use_premium else "",
-        placeholder="+31..., +32...",
-        help="Bijvoorbeeld een regionaal nummer dat je via je provider naar de AI doorschakelt.",
-        key="ai_local_number",
-    )
-
-    st.metric("Beschikbare AI-belminuten", f"{ai_minutes} min")
-    st.caption(
-        "Oproepen naar dit nummer verbruiken AI-minuten uit je bundel. "
-        "Is je bundel leeg, dan neemt de AI niet meer op tot je aanvult."
-    )
-
-    st.markdown("**AI-minuten bundels (demo)**")
-    b1, b2, b3 = st.columns(3)
-    with b1:
-        st.write("€25 · 250 min")
-        if st.button("Koop 250 min", key="ai_bundle_250"):
-            add_ai_local_minutes(company_id, 250)
-            _success("250 AI-minuten toegevoegd (demo).")
-            st.rerun()
-    with b2:
-        st.write("€45 · 500 min")
-        if st.button("Koop 500 min", key="ai_bundle_500"):
-            add_ai_local_minutes(company_id, 500)
-            _success("500 AI-minuten toegevoegd (demo).")
-            st.rerun()
-    with b3:
-        st.write("€80 · 1.000 min")
-        if st.button("Koop 1.000 min", key="ai_bundle_1000"):
-            add_ai_local_minutes(company_id, 1000)
-            _success("1.000 AI-minuten toegevoegd (demo).")
-            st.rerun()
-
-    st.markdown("---")
-
-    # ========== SAFEGUARDS ==========
+    # =============================
+    # SAFEGUARDS (voor de gekozen optie)
+    # =============================
     st.markdown("### Veiligheidslimieten (Safeguards)")
 
     sg1, sg2 = st.columns(2)
@@ -890,29 +906,18 @@ def render_ai(company_id: int):
         "Safeguards beschermen jou en je klanten tegen eindeloze gesprekken, fouten of misbruik."
     )
 
-    extra_min = 0
-    if not use_premium:
-        extra_min = st.number_input(
-            "Handmatig AI-minuten toevoegen (alleen admin/debug)",
-            min_value=0,
-            max_value=10000,
-            step=50,
-            key="ai_add_minutes",
-        )
-
-    # ========== OPSLAAN ==========
+    # =============================
+    # OPSLAAN
+    # =============================
     if st.button("AI-instellingen opslaan", type="primary", key="ai_save_btn"):
         try:
-            line_type_new = "premium" if use_premium else "standard"
-            phone_to_save = (number_0900 if use_premium else local_number) or None
-
             set_company_ai_enabled(company_id, enabled_new)
             set_company_ai_phone_number(company_id, phone_to_save)
 
             update_company_ai_line(
                 company_id,
                 line_type=line_type_new,
-                premium_rate_cents=premium_rate_cents if use_premium else None,
+                premium_rate_cents=premium_rate_cents if line_type_new == "premium" else None,
             )
 
             update_company_ai_safeguards(
@@ -923,7 +928,7 @@ def render_ai(company_id: int):
                 tariff_announce=bool(tariff_new),
             )
 
-            if not use_premium and extra_min > 0:
+            if line_type_new == "standard" and extra_min > 0:
                 add_ai_local_minutes(company_id, int(extra_min))
 
             _success("AI-instellingen opgeslagen.")
