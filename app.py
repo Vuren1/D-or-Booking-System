@@ -40,7 +40,7 @@ from database import (
     # stats
     get_customer_stats,
     get_status_overview,
-    # AI
+    # AI / AI Telefoniste
     get_company_ai_settings,
     set_company_ai_enabled,
     set_company_ai_phone_number,
