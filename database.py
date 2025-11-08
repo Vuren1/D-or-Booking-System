@@ -409,6 +409,56 @@ def get_company_logo(company_id: int) -> Optional[str]:
     conn.close()
     return row["logo_path"] if row and row["logo_path"] else None
 
+def get_company_ai_settings(company_id: int) -> dict:
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        """
+        SELECT ai_assistant_enabled, ai_phone_number
+        FROM companies
+        WHERE id = ?
+        """,
+        (company_id,),
+    )
+    row = c.fetchone()
+    conn.close()
+
+    if not row:
+        return {"enabled": False, "phone_number": None}
+
+    return {
+        "enabled": bool(row["ai_assistant_enabled"]),
+        "phone_number": row["ai_phone_number"],
+    }
+
+
+def set_company_ai_enabled(company_id: int, enabled: bool):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        """
+        UPDATE companies
+        SET ai_assistant_enabled = ?
+        WHERE id = ?
+        """,
+        (1 if enabled else 0, company_id),
+    )
+    conn.commit()
+    conn.close()
+
+def set_company_ai_phone_number(company_id: int, phone_number: str | None):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        """
+        UPDATE companies
+        SET ai_phone_number = ?
+        WHERE id = ?
+        """,
+        (phone_number, company_id),
+    )
+    conn.commit()
+    conn.close()
 
 def is_company_paid(company_id: int) -> bool:
     conn = get_connection()
