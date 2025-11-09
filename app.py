@@ -888,63 +888,67 @@ def render_ai(company_id: int):
 
         
 
-# =============================
-# AI-INSTRUCTIES (met vaste gouden rand)
-# =============================
+def render_ai(company_id: int):
+    st.markdown("## AI Telefoniste / Callbot")
+    ...
+    phone_to_save = local_number or None
+    line_type_new = "standard"
 
-st.markdown(
-    """
-    <style>
-    /* Vaste gouden rand rond alleen het AI-instructieveld */
-    textarea[placeholder="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf. Gebruik de voorbeeldtekst onderaan als basis en pas die aan."] {
-        box-shadow: 0 0 0 2px #d9a81e !important;
-        border-radius: 12px !important;
-        border: none !important;
-        outline: none !important;
-        background-color: #f7f7f7 !important;
-        padding: 18px 24px !important;
-    }
+    # =============================
+    # AI-INSTRUCTIES (met vaste gouden rand)
+    # =============================
+    st.markdown(
+        """
+        <style>
+        /* Vaste gouden rand rond alleen het AI-instructieveld */
+        textarea[placeholder="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf. Gebruik de voorbeeldtekst onderaan als basis en pas die aan."] {
+            box-shadow: 0 0 0 2px #d9a81e !important;
+            border-radius: 12px !important;
+            border: none !important;
+            outline: none !important;
+            background-color: #f7f7f7 !important;
+            padding: 18px 24px !important;
+        }
 
-    textarea[placeholder="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf. Gebruik de voorbeeldtekst onderaan als basis en pas die aan."]:focus {
-        box-shadow: 0 0 0 2px #d9a81e !important;  /* zelfde rand bij focus */
-        border: none !important;
-        outline: none !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+        textarea[placeholder="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf. Gebruik de voorbeeldtekst onderaan als basis en pas die aan."]:focus {
+            box-shadow: 0 0 0 2px #d9a81e !important;
+            border: none !important;
+            outline: none !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
-ai_instructions_new = st.text_area(
-    "Instructies voor jouw AI-telefoniste",
-    value=ai_instructions,
-    placeholder=(
-        "Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf. "
-        "Gebruik de voorbeeldtekst onderaan als basis en pas die aan."
-    ),
-)
+    ai_instructions_new = st.text_area(
+        "Instructies voor jouw AI-telefoniste",
+        value=ai_instructions,
+        placeholder=(
+            "Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf. "
+            "Gebruik de voorbeeldtekst onderaan als basis en pas die aan."
+        ),
+    )
 
-st.markdown(
-    "**Voorbeeldtekst** (kopieer en pas aan):\n"
-    "Je bent de telefoniste van **Kapsalon Luna** in **Antwerpen**. "
-    "Je spreekt vriendelijk en duidelijk Nederlands en gebruikt **'u'**. "
-    "Je helpt bij het maken, verplaatsen en annuleren van afspraken. "
-    "Je vraagt altijd naar **naam**, **telefoonnummer** en **reden van het bezoek**. "
-    "Je bevestigt elke afspraak kort en duidelijk en je geeft geen prijzen of info die je niet zeker weet."
-)
+    st.markdown(
+        "**Voorbeeldtekst** (kopieer en pas aan):\n"
+        "Je bent de telefoniste van **Kapsalon Luna** in **Antwerpen**. "
+        "Je spreekt vriendelijk en duidelijk Nederlands en gebruikt **'u'**. "
+        "Je helpt bij het maken, verplaatsen en annuleren van afspraken. "
+        "Je vraagt altijd naar **naam**, **telefoonnummer** en **reden van het bezoek**. "
+        "Je bevestigt elke afspraak kort en duidelijk en je geeft geen prijzen of info die je niet zeker weet."
+    )
 
-st.markdown(
-    "**Ideeën wat je hier nog meer kunt toevoegen:**\n"
-    "- Taal & toon: formeel of informeel, 'u' of 'je'.\n"
-    "- Hoe je je bedrijf noemt aan de telefoon (bedrijfsnaam, merknaam, locatie).\n"
-    "- Welke diensten je aanbiedt en de standaard duur per dienst.\n"
-    "- Wat te doen bij volgeboekt: alternatief tijdstip voorstellen, wachtlijst, terugbelverzoek.\n"
-    "- Regels rond annuleren/no-shows (bijv. min. 24u op voorhand).\n"
-    "- Of de assistente nooit prijzen mag verzinnen.\n"
-    "- Of ze afspraken altijd moet herhalen ter bevestiging (datum, tijd, dienst, naam klant).\n"
-    "- Of ze bepaalde woorden/zinnen juist wél of juist niet mag gebruiken."
-)
-
+    st.markdown(
+        "**Ideeën wat je hier nog meer kunt toevoegen:**\n"
+        "- Taal & toon: formeel of informeel, 'u' of 'je'.\n"
+        "- Hoe je je bedrijf noemt aan de telefoon (bedrijfsnaam, merknaam, locatie).\n"
+        "- Welke diensten je aanbiedt en de standaard duur per dienst.\n"
+        "- Wat te doen bij volgeboekt: alternatief tijdstip voorstellen, wachtlijst, terugbelverzoek.\n"
+        "- Regels rond annuleren/no-shows (bijv. min. 24u op voorhand).\n"
+        "- Of de assistente nooit prijzen mag verzinnen.\n"
+        "- Of ze afspraken altijd moet herhalen ter bevestiging (datum, tijd, dienst, naam klant).\n"
+        "- Of ze bepaalde woorden/zinnen juist wél of juist niet mag gebruiken."
+    )
 
     # =============================
     # SAFEGUARDS
@@ -992,13 +996,11 @@ st.markdown(
         try:
             set_company_ai_enabled(company_id, enabled_new)
             set_company_ai_phone_number(company_id, phone_to_save)
-
             update_company_ai_line(
                 company_id,
                 line_type=line_type_new,
                 premium_rate_cents=premium_rate_cents if line_type_new == "premium" else None,
             )
-
             update_company_ai_safeguards(
                 company_id,
                 max_minutes=int(max_minutes_new),
@@ -1006,18 +1008,14 @@ st.markdown(
                 hangup_after_booking=bool(hangup_new),
                 tariff_announce=bool(tariff_new),
             )
-
             update_company_ai_instructions(
                 company_id,
                 (ai_instructions_new or "").strip() or None,
             )
-
             if line_type_new == "standard" and extra_min > 0:
                 add_ai_local_minutes(company_id, int(extra_min))
-
             _success("AI-instellingen opgeslagen.")
             st.rerun()
-
         except Exception as e:
             _error(f"Opslaan mislukt: {e}")
 
