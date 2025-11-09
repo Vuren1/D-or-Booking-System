@@ -755,18 +755,18 @@ def render_ai(company_id: int):
     ai_minutes = get_ai_local_minutes_balance(company_id)
     premium_rate_cents = int(PREMIUM_AI_0900_RATE_EUR * 100)
 
-    # 1. Globale schakelaar
-    enabled_new = st.checkbox(
+    # AI aan/uit
+    enabled_new = st.toggle(
         "AI-telefoniste inschakelen",
         value=enabled,
-        help="Als dit uit staat, neemt de AI nooit op, ongeacht de instellingen hieronder.",
+        help="Schakelt de AI-telefoniste volledig in of uit.",
         key="ai_enabled",
     )
 
-    # 2. Kies optie: 0900 of lokaal nummer
+    # Keuze: 0900 of lokaal nummer
     mode_labels = {
-        "0900": "0900-nummer (beller betaalt, AI inbegrepen)",
-        "local": "Lokaal nummer (AI uit je minutenbundel)",
+        "0900": "Optie 1: 0900-nummer (beller betaalt minuten)",
+        "local": "Optie 2: lokaal/VoIP-nummer (minuten uit jouw bundel)",
     }
     default_mode = "0900" if line_type == "premium" else "local"
 
@@ -778,7 +778,6 @@ def render_ai(company_id: int):
         horizontal=True,
         key="ai_mode_choice",
     )
-
     use_premium = (selected_mode == "0900")
 
     # Waarden die per optie worden gezet
@@ -808,23 +807,22 @@ def render_ai(company_id: int):
         st.write(
             f"- Vast tarief voor de beller: **{_format_money(PREMIUM_AI_0900_RATE_EUR)} per minuut**."
         )
-        st.write("- Tarief is standaard voor alle bedrijven en niet aanpasbaar.")
-        st.write("- De kosten van de AI zijn hiermee gedekt; je hoeft geen AI-minutenbundels te kopen.")
-        st.write("- Ideaal als je kosten wilt doorbelasten aan de beller.")
+        st.write("- Jij hoeft geen bundels te beheren; afrekening loopt via de telecomprovider.")
+        st.write("- Je ontvangt een deel van het tarief per minuut (instelling via support).")
 
-        phone_to_save = number_0900 or None
+        phone_to_save = (number_0900 or "").strip() or None
         line_type_new = "premium"
 
     # =============================
-    # OPTIE 2: LOKAAL NUMMER
+    # OPTIE 2: LOKAAL / VOIP NUMMER
     # =============================
     else:
-        st.markdown("### Optie 2: Lokaal nummer")
+        st.markdown("### Optie 2: lokaal of VoIP-nummer")
 
         if enabled_new:
-            st.success("Deze optie is actief zodra je hieronder je AI-nummer instelt.")
+            st.success("Deze optie is momenteel actief.")
         else:
-            st.warning("Je hebt lokaal nummer geselecteerd, maar de AI-telefoniste staat uit.")
+            st.warning("AI staat uit. Zet de schakelaar bovenaan aan om deze optie te gebruiken.")
 
         local_number = st.text_input(
             "AI-nummer (bestemmingsnummer voor doorschakeling)",
@@ -832,9 +830,8 @@ def render_ai(company_id: int):
             placeholder="+31..., +32...",
             help=(
                 "Dit is het nummer waarop de AI-telefoniste je oproepen mag aannemen. "
-                "Gebruik bij voorkeur een extra vast/VoIP-nummer. "
-                "Stel bij je provider in dat je huidige zakelijke nummer naar dit AI-nummer "
-                "wordt doorgeschakeld bij geen antwoord, buiten openingstijden of altijd."
+                "Stel bij je provider in dat je huidige nummer naar dit AI-nummer doorschakelt "
+                "bij geen antwoord, buiten openingstijden of altijd."
             ),
             key="ai_local_number",
         )
@@ -842,10 +839,9 @@ def render_ai(company_id: int):
         st.info(
             "Praktisch voorbeeld:\n"
             "- Behoud je huidige nummer (bv. 03..., 06...).\n"
-            "- Vraag een extra nummer of VoIP-nummer aan waarop de AI mag opnemen.\n"
-            "- Stel bij je provider in:\n"
-            "    • Bij geen antwoord / bij bezet / buiten openingsuren: doorschakelen naar dit AI-nummer.\n"
-            "- Oproepen die op dit AI-nummer binnenkomen, worden door de AI afgehandeld en verbruiken minuten uit je bundel."
+            "- Vraag een extra vast/VoIP-nummer aan waarop de AI mag opnemen.\n"
+            "- Stel bij je provider doorschakeling in naar dit AI-nummer.\n"
+            "- Oproepen op dit AI-nummer worden door de AI afgehandeld en verbruiken minuten uit je bundel."
         )
 
         st.metric("Beschikbare AI-belminuten", f"{ai_minutes} min")
@@ -883,16 +879,8 @@ def render_ai(company_id: int):
             key="ai_add_minutes",
         )
 
-        phone_to_save = local_number or None
+        phone_to_save = (local_number or "").strip() or None
         line_type_new = "standard"
-
-        
-
-def render_ai(company_id: int):
-    st.markdown("## AI Telefoniste / Callbot")
-    ...
-    phone_to_save = local_number or None
-    line_type_new = "standard"
 
     # =============================
     # AI-INSTRUCTIES (met vaste gouden rand)
@@ -900,7 +888,6 @@ def render_ai(company_id: int):
     st.markdown(
         """
         <style>
-        /* Vaste gouden rand rond alleen het AI-instructieveld */
         textarea[placeholder="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf. Gebruik de voorbeeldtekst onderaan als basis en pas die aan."] {
             box-shadow: 0 0 0 2px #d9a81e !important;
             border-radius: 12px !important;
@@ -909,7 +896,6 @@ def render_ai(company_id: int):
             background-color: #f7f7f7 !important;
             padding: 18px 24px !important;
         }
-
         textarea[placeholder="Schrijf hier hoe de AI zich moet gedragen voor jouw bedrijf. Gebruik de voorbeeldtekst onderaan als basis en pas die aan."]:focus {
             box-shadow: 0 0 0 2px #d9a81e !important;
             border: none !important;
@@ -941,13 +927,12 @@ def render_ai(company_id: int):
     st.markdown(
         "**Ideeën wat je hier nog meer kunt toevoegen:**\n"
         "- Taal & toon: formeel of informeel, 'u' of 'je'.\n"
-        "- Hoe je je bedrijf noemt aan de telefoon (bedrijfsnaam, merknaam, locatie).\n"
-        "- Welke diensten je aanbiedt en de standaard duur per dienst.\n"
-        "- Wat te doen bij volgeboekt: alternatief tijdstip voorstellen, wachtlijst, terugbelverzoek.\n"
-        "- Regels rond annuleren/no-shows (bijv. min. 24u op voorhand).\n"
+        "- Hoe je je bedrijf noemt aan de telefoon.\n"
+        "- Welke diensten je aanbiedt en hoe lang ze duren.\n"
+        "- Wat te doen bij volgeboekt (alternatief, wachtlijst, terugbelverzoek).\n"
+        "- Regels rond annuleren/no-shows.\n"
         "- Of de assistente nooit prijzen mag verzinnen.\n"
-        "- Of ze afspraken altijd moet herhalen ter bevestiging (datum, tijd, dienst, naam klant).\n"
-        "- Of ze bepaalde woorden/zinnen juist wél of juist niet mag gebruiken."
+        "- Of ze afspraken altijd moet herhalen ter bevestiging."
     )
 
     # =============================
@@ -1014,6 +999,7 @@ def render_ai(company_id: int):
             )
             if line_type_new == "standard" and extra_min > 0:
                 add_ai_local_minutes(company_id, int(extra_min))
+
             _success("AI-instellingen opgeslagen.")
             st.rerun()
         except Exception as e:
