@@ -889,10 +889,11 @@ def render_ai(company_id: int):
             "(bij geen antwoord, bezettoon, buiten openingstijden of altijd)."
         )
         st.info(
-    "Dit nummer is gekoppeld aan jouw AI-telefoniste en wordt niet automatisch gewijzigd. "
-    "Dit is een technisch doorschakelnummer voor jouw telefonieprovider, niet het nummer dat je aan klanten communiceert. "
-    "Wil je een AI-nummer voor een ander land, neem dan contact op met support (het wijzigen van nummers kan extra kosten met zich meebrengen)."
-)
+            "Dit nummer is gekoppeld aan jouw AI-telefoniste en wordt niet automatisch gewijzigd. "
+            "Dit is een technisch doorschakelnummer voor jouw telefonieprovider, niet het nummer dat je aan klanten communiceert. "
+            "Wil je een AI-nummer voor een ander land, neem dan contact op met support "
+            "(het wijzigen van nummers kan extra kosten met zich meebrengen)."
+        )
 
     else:
         # Nog geen nummer -> land kiezen en AI-nummer aanmaken
@@ -919,12 +920,12 @@ def render_ai(company_id: int):
         )
 
         if st.button("Maak mijn AI-nummer aan", key="ai_create_number"):
-    try:
-        new_number = _provision_ai_number(company_id, selected_country)
-        _success(f"Jouw AI-nummer is aangemaakt: {new_number}")
-        st.rerun()
-    except Exception as e:
-        _error(f"AI-nummer aanmaken mislukt: {e}")
+            try:
+                new_number = _provision_ai_number(company_id, selected_country)
+                _success(f"Jouw AI-nummer is aangemaakt: {new_number}")
+                st.rerun()
+            except Exception as e:
+                _error(f"AI-nummer aanmaken mislukt: {e}")
 
     # Na eventuele creatie opnieuw ophalen
     settings = get_company_ai_settings(company_id) or {}
@@ -1032,7 +1033,7 @@ def render_ai(company_id: int):
         "Je bevestigt elke afspraak kort en duidelijk en je geeft geen prijzen of info die je niet zeker weet."
     )
 
-        # ========== SAFEGUARDS ==========
+    # ========== SAFEGUARDS ==========
     st.markdown("### Veiligheidslimieten (Safeguards)")
 
     sg1, sg2 = st.columns(2)
@@ -1104,7 +1105,6 @@ def render_ai(company_id: int):
 
         except Exception as e:
             _error(f"Opslaan mislukt: {e}")
-
 
 def render_account(cid: int):
     st.markdown("## Account & abonnement")
