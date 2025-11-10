@@ -71,18 +71,47 @@ init_db()
 # =============================
 # Helpers
 # =============================
-def _assign_0800_number(company_id: int) -> str:
+
+SUPPORTED_AI_COUNTRIES = {
+    "BE": {"label": "België"},
+    "NL": {"label": "Nederland"},
+}
+
+
+def _assign_ai_number(company_id: int, country_code: str) -> str:
     """
-    Demo: koppel een uniek 0800-nummer aan dit bedrijf zodra er een bundel wordt gekocht.
-    In productie vervang je dit door een API-call naar je telecomprovider.
+    DEMO-implementatie:
+    Wijs een lokaal AI-nummer toe op basis van het gekozen land.
+    In productie vervang je dit door een API-call naar je VoIP-provider
+    (Twilio, Zadarma, etc.) om een echt nummer te bestellen.
+    Als er al een nummer is, laten we dat staan.
     """
     settings = get_company_ai_settings(company_id) or {}
-    phone = (settings.get("phone_number") or settings.get("ai_phone_number") or "").strip()
-    line_type = settings.get("ai_line_type") or "standard"
+    existing = (
+        (settings.get("phone_number") or settings.get("ai_phone_number") or "")
+        .strip()
+    )
 
-    # Als er al een 0800-nummer actief is, gebruik dat
-    if phone and line_type == "premium" and phone.startswith("0800"):
-        return phone
+    # Als er al een nummer is, nooit automatisch veranderen
+    if existing and not existing.startswith("0800"):
+        return existing
+
+    # DEMO: pseudo-nummers genereren op basis van company_id
+    if country_code == "BE":
+        new_number = f"+32 2 {company_id:04d} 000"
+    elif country_code == "NL":
+        new_number = f"+31 85 {company_id:04d} 000"
+    else:
+        new_number = f"+32 2 {company_id:04d} 000"
+
+    set_company_ai_phone_number(company_id, new_number)
+    update_company_ai_line(
+        company_id,
+        line_type="standard",
+        premium_rate_cents=None,
+    )
+
+    return new_number
 
     # Demo: genereer pseudo-uniek 0800-nummer op basis van company_id
     new_number = f"0800{company_id:04d}"
@@ -761,11 +790,15 @@ def render_ai(company_id: int):
 
     line_type = settings.get("ai_line_type") or "standard"
 
-    phone_number = (
+        phone_number = (
         settings.get("phone_number")
         or settings.get("ai_phone_number")
         or ""
     ).strip()
+
+    # Oude test-0800 nummers uit vorige versie negeren
+    if phone_number.startswith("0800"):
+        phone_number = ""
 
     guard_max_minutes = int(settings.get("ai_guard_max_minutes", 8) or 8)
     guard_idle_seconds = int(settings.get("ai_guard_idle_seconds", 25) or 25)
