@@ -851,7 +851,7 @@ def render_ai(company_id: int):
         st.markdown(
             f"**Jouw AI-nummer:** `{phone_number}`  \n"
             "Stel bij je telefonieprovider doorschakeling in naar dit nummer "
-            "(bij geen antwoord, bezettoon of buiten openingstijden)."
+            "(bij geen antwoord, bezettoon, buiten openingstijden of altijd)."
         )
         st.info(
     "Dit nummer is gekoppeld aan jouw AI-telefoniste en wordt niet automatisch gewijzigd. "
