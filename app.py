@@ -1065,6 +1065,7 @@ def render_ai(company_id: int):
 
         except Exception as e:
             _error(f"Opslaan mislukt: {e}")
+
 def render_account(cid: int):
     st.markdown("## Account & abonnement")
 
