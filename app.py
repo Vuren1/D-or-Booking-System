@@ -759,7 +759,8 @@ def render_ai(company_id: int):
         or settings.get("ai_assistant_enabled", 0)
     )
 
-    line_type = settings.get("ai_line_type") or "standard"  # 'standard' (eigen nummer) of 'premium' (0800)
+    line_type = settings.get("ai_line_type") or "standard"
+
     phone_number = (
         settings.get("phone_number")
         or settings.get("ai_phone_number")
@@ -772,7 +773,7 @@ def render_ai(company_id: int):
         int(settings.get("ai_guard_hangup_after_booking", 1) or 1)
     )
     tariff_announce = bool(
-        int(settings.get("ai_tariff_announce", 1) or 1)
+        int(settings.get("ai_tariff_announce", 0) or 0)
     )
 
     ai_minutes = get_ai_local_minutes_balance(company_id)
@@ -785,161 +786,108 @@ def render_ai(company_id: int):
         key="ai_enabled",
     )
 
-    # ========== Kies routing: 0800 of eigen nummer ==========
-    mode_labels = {
-        "0800": "0800-nummer (klanten bellen gratis, jij betaalt via bundel)",
-        "local": "Eigen nummer / doorschakeling (klanten bellen aan normaal tarief)",
-    }
-    default_mode = "0800" if line_type == "premium" else "local"
+    st.markdown("---")
 
-    selected_mode = st.radio(
-        "Kies hoe jouw AI-telefoniste bereikbaar is",
-        options=["0800", "local"],
-        index=0 if default_mode == "0800" else 1,
-        format_func=lambda v: mode_labels[v],
-        horizontal=True,
-        key="ai_mode_choice",
-    )
+    # ========== LAND & AI-NUMMER ==========
+    st.markdown("### Jouw AI-nummer")
 
-    # Waarden die we onderaan opslaan
-    phone_to_save: str | None = phone_number or None
-    line_type_new: str = line_type
-    extra_min: int = 0  # alleen gebruikt bij lokale optie voor handmatige toevoeging
+    extra_min = 0  # fallback, wordt gebruikt bij opslaan
 
-    # ========== OPTIE 1: 0800-nummer ==========
-    if selected_mode == "0800":
-        st.markdown("### Optie 1: 0800-nummer")
+    if phone_number:
+        # Nummer bestaat al -> beschouwd als 'locked'
+        if phone_number.startswith("+32"):
+            st.markdown("Land van je AI-nummer: **België**")
+        elif phone_number.startswith("+31"):
+            st.markdown("Land van je AI-nummer: **Nederland**")
+        else:
+            st.markdown("Land van je AI-nummer: *(onbekend, custom nummer)*")
 
-        existing_0800 = (
-            phone_number
-            if line_type == "premium" and phone_number.startswith("0800")
-            else ""
+        st.markdown(
+            f"**Jouw AI-nummer:** `{phone_number}`  \n"
+            "Stel bij je telefonieprovider doorschakeling in naar dit nummer "
+            "(bij geen antwoord, bezettoon of buiten openingstijden)."
+        )
+        st.info(
+            "Dit nummer is gekoppeld aan jouw AI-telefoniste en wordt niet automatisch gewijzigd. "
+            "Wil je een ander nummer, neem dan contact op met support."
         )
 
-        if enabled_new:
-            st.success("AI-telefoniste staat (na activatie) klaar op jouw 0800-nummer.")
-        else:
-            st.warning(
-                "AI-telefoniste staat uit. Schakel bovenaan in om oproepen via 0800 te laten beantwoorden."
-            )
+    else:
+        # Nog geen nummer -> land kiezen en AI-nummer aanmaken
+        country_options = list(SUPPORTED_AI_COUNTRIES.keys())
+        country_labels = {
+            code: SUPPORTED_AI_COUNTRIES[code]["label"]
+            for code in country_options
+        }
 
-        if existing_0800:
-            st.info(f"Jouw actieve 0800-nummer: **{existing_0800}**")
-        else:
-            st.warning(
-                "Je hebt nog geen 0800-nummer. Kies hieronder een 0800-bundel; "
-                "na activatie krijg je direct jouw unieke 0800-nummer (demo)."
-            )
+        default_country = "BE"
+        selected_country = st.selectbox(
+            "Kies het land voor jouw AI-nummer",
+            options=country_options,
+            index=country_options.index(default_country)
+            if default_country in country_options
+            else 0,
+            format_func=lambda c: country_labels.get(c, c),
+            key="ai_country_select",
+        )
 
-        st.markdown("**0800-bundels (demo – prijzen vul je later in)**")
+        st.caption(
+            "We maken voor jou een lokaal AI-nummer aan in het gekozen land. "
+            "Gebruik dat nummer als bestemming voor doorschakeling vanuit je eigen bedrijfsnummer."
+        )
+
+        if st.button("Maak mijn AI-nummer aan", key="ai_create_number"):
+            new_number = _assign_ai_number(company_id, selected_country)
+            _success(f"Jouw AI-nummer is aangemaakt: {new_number}")
+            st.rerun()
+
+    # Na eventuele creatie opnieuw ophalen
+    settings = get_company_ai_settings(company_id) or {}
+    phone_number = (
+        settings.get("phone_number")
+        or settings.get("ai_phone_number")
+        or ""
+    ).strip()
+    ai_minutes = get_ai_local_minutes_balance(company_id)
+
+    # ========== BUNDELS (alleen tonen als er een AI-nummer is) ==========
+    if phone_number:
+        st.markdown("### AI-belminuten bundels")
+
+        st.markdown(
+            f"Alle gesprekken die via jouw AI-nummer `{phone_number}` binnenkomen, "
+            "verbruiken minuten uit je AI-bundel."
+        )
+
+        st.metric("Huidige AI-minuten", f"{ai_minutes} min")
+
         c1, c2, c3 = st.columns(3)
 
         with c1:
-            st.write("0800 Basic · 250 min")
-            if st.button("Activeer 0800 Basic", key="bundle_0800_250"):
-                new_number = _assign_0800_number(company_id)
-                add_ai_local_minutes(company_id, 250)
-                _success(
-                    f"0800-nummer geactiveerd: {new_number}. 250 AI-belminuten toegevoegd (demo)."
-                )
+            st.write("**100 minuten**")
+            st.write("€10 · €0,10/min")
+            if st.button("Koop 100 min", key="bundle_100"):
+                add_ai_local_minutes(company_id, 100)
+                _success("100 AI-minuten toegevoegd.")
                 st.rerun()
 
         with c2:
-            st.write("0800 Pro · 500 min")
-            if st.button("Activeer 0800 Pro", key="bundle_0800_500"):
-                new_number = _assign_0800_number(company_id)
-                add_ai_local_minutes(company_id, 500)
-                _success(
-                    f"0800-nummer geactiveerd: {new_number}. 500 AI-belminuten toegevoegd (demo)."
-                )
+            st.write("**250 minuten**")
+            st.write("€20 · €0,08/min")
+            if st.button("Koop 250 min", key="bundle_250"):
+                add_ai_local_minutes(company_id, 250)
+                _success("250 AI-minuten toegevoegd.")
                 st.rerun()
 
         with c3:
-            st.write("0800 XL · 1.000 min")
-            if st.button("Activeer 0800 XL", key="bundle_0800_1000"):
-                new_number = _assign_0800_number(company_id)
-                add_ai_local_minutes(company_id, 1000)
-                _success(
-                    f"0800-nummer geactiveerd: {new_number}. 1.000 AI-belminuten toegevoegd (demo)."
-                )
-                st.rerun()
-
-        # Update na eventuele bundel aankopen
-        ai_minutes = get_ai_local_minutes_balance(company_id)
-        st.metric("Beschikbare AI-belminuten", f"{ai_minutes} min")
-        st.caption(
-            "Alle 0800-oproepen verbruiken minuten uit je AI-belminuten. "
-            "In productie koppel je dit aan je echte 0800-provider."
-        )
-
-        # Bij actieve 0800-lijn opslaan als 'premium'
-        if existing_0800:
-            phone_to_save = existing_0800
-            line_type_new = "premium"
-        else:
-            # Nog geen nummer: nog niet omschakelen
-            line_type_new = "standard" if line_type != "premium" else "premium"
-
-    # ========== OPTIE 2: Eigen nummer / doorschakeling ==========
-    else:
-        st.markdown("### Optie 2: Eigen nummer / doorschakeling")
-
-        if enabled_new:
-            st.success(
-                "AI-telefoniste staat klaar op jouw eigen nummer (of VoIP-nummer) met doorschakeling."
-            )
-        else:
-            st.warning(
-                "AI-telefoniste staat uit. Schakel bovenaan in om oproepen te laten beantwoorden."
-            )
-
-        local_number = st.text_input(
-            "AI-nummer (bestemmingsnummer voor doorschakeling)",
-            value=phone_number if line_type != "premium" else "",
-            placeholder="+31..., +32...",
-            help=(
-                "Dit is het nummer waarop de AI-telefoniste je oproepen mag aannemen. "
-                "Gebruik bij voorkeur een extra vast/VoIP-nummer. "
-                "Stel bij je provider doorschakeling in naar dit AI-nummer "
-                "(bij geen antwoord, buiten openingstijden of altijd)."
-            ),
-            key="ai_local_number",
-        )
-
-        st.info(
-            "Voorbeeld:\n"
-            "- Behoud je bestaande bedrijfsnummer.\n"
-            "- Vraag een extra VoIP-nummer aan waarop de AI mag opnemen.\n"
-            "- Stel doorschakeling in naar dit AI-nummer.\n"
-            "- Oproepen die daar binnenkomen, worden door de AI afgehandeld."
-        )
-
-        st.metric("Beschikbare AI-belminuten", f"{ai_minutes} min")
-        st.caption(
-            "Oproepen via dit AI-nummer verbruiken minuten uit je AI-bundel."
-        )
-
-        st.markdown("**AI-minuten bundels (demo)**")
-        b1, b2, b3 = st.columns(3)
-        with b1:
-            st.write("250 min")
-            if st.button("Koop 250 min", key="ai_local_250"):
-                add_ai_local_minutes(company_id, 250)
-                _success("250 AI-minuten toegevoegd (demo).")
-                st.rerun()
-        with b2:
-            st.write("500 min")
-            if st.button("Koop 500 min", key="ai_local_500"):
+            st.write("**500 minuten**")
+            st.write("€30 · €0,06/min")
+            if st.button("Koop 500 min", key="bundle_500"):
                 add_ai_local_minutes(company_id, 500)
-                _success("500 AI-minuten toegevoegd (demo).")
-                st.rerun()
-        with b3:
-            st.write("1.000 min")
-            if st.button("Koop 1.000 min", key="ai_local_1000"):
-                add_ai_local_minutes(company_id, 1000)
-                _success("1.000 AI-minuten toegevoegd (demo).")
+                _success("500 AI-minuten toegevoegd.")
                 st.rerun()
 
+        # Optioneel: handmatige toevoeging (admin/debug)
         extra_min = st.number_input(
             "Handmatig AI-minuten toevoegen (alleen admin/debug)",
             min_value=0,
@@ -948,10 +896,16 @@ def render_ai(company_id: int):
             key="ai_add_minutes",
         )
 
-        phone_to_save = (local_number or "").strip() or None
-        line_type_new = "standard"
+    else:
+        st.warning(
+            "Maak eerst je AI-nummer aan. Daarna kun je AI-minutenbundels kopen."
+        )
 
-    # ========== AI-INSTRUCTIES (met vaste gouden rand) ==========
+    st.markdown("---")
+
+    # ========== AI-INSTRUCTIES ==========
+    st.markdown("### Instructies voor jouw AI-telefoniste")
+
     st.markdown(
         """
         <style>
@@ -1020,7 +974,7 @@ def render_ai(company_id: int):
         key="ai_guard_hangup",
     )
     tariff_new = cb2.checkbox(
-        "Tarief aankondigen bij start",
+        "Tarief aankondigen aan beller",
         value=tariff_announce,
         key="ai_tariff_announce",
     )
@@ -1033,13 +987,16 @@ def render_ai(company_id: int):
     if st.button("AI-instellingen opslaan", type="primary", key="ai_save_btn"):
         try:
             set_company_ai_enabled(company_id, enabled_new)
-            set_company_ai_phone_number(company_id, phone_to_save)
 
-            update_company_ai_line(
-                company_id,
-                line_type=line_type_new,
-                premium_rate_cents=None,  # 0800-tarieven regel je met je telco
-            )
+            # Nummer + line type alleen updaten als er een nummer is
+            phone_to_save = phone_number or None
+            if phone_to_save:
+                set_company_ai_phone_number(company_id, phone_to_save)
+                update_company_ai_line(
+                    company_id,
+                    line_type="standard",
+                    premium_rate_cents=None,
+                )
 
             update_company_ai_safeguards(
                 company_id,
@@ -1054,7 +1011,8 @@ def render_ai(company_id: int):
                 (ai_instructions_new or "").strip() or None,
             )
 
-            if line_type_new == "standard" and extra_min > 0:
+            # Handmatige minuten (indien ingevuld en AI-nummer bestaat)
+            if phone_to_save and extra_min > 0:
                 add_ai_local_minutes(company_id, int(extra_min))
 
             _success("AI-instellingen opgeslagen.")
@@ -1064,10 +1022,9 @@ def render_ai(company_id: int):
             _error(f"Opslaan mislukt: {e}")
 
     st.info(
-        "Optie 1 (0800): klanten bellen gratis; jij betaalt via AI-minutenbundels. "
-        "Optie 2 (eigen nummer): klanten bellen aan normaal tarief; gesprekken verbruiken AI-minuten uit je bundel."
+        "Elke klant krijgt één lokaal AI-nummer inbegrepen in het abonnement. "
+        "Alle doorgeschakelde oproepen naar dat nummer verbruiken AI-minuten uit de bundels."
     )
-
 
 def render_account(cid: int):
     st.markdown("## Account & abonnement")
