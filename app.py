@@ -854,9 +854,10 @@ def render_ai(company_id: int):
             "(bij geen antwoord, bezettoon of buiten openingstijden)."
         )
         st.info(
-            "Dit nummer is gekoppeld aan jouw AI-telefoniste en wordt niet automatisch gewijzigd. "
-            "Wil je een ander nummer, neem dan contact op met support."
-        )
+    "Dit nummer is gekoppeld aan jouw AI-telefoniste en wordt niet automatisch gewijzigd. "
+    "Dit is een technisch doorschakelnummer voor jouw telefonieprovider, niet het nummer dat je aan klanten communiceert. "
+    "Wil je een AI-nummer voor een ander land, neem dan contact op met support (het wijzigen van nummers kan extra kosten met zich meebrengen)."
+)
 
     else:
         # Nog geen nummer -> land kiezen en AI-nummer aanmaken
