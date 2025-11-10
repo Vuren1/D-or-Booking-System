@@ -84,13 +84,34 @@ def _assign_ai_number(company_id: int, country_code: str) -> str:
     Wijs een lokaal AI-nummer toe op basis van het gekozen land.
     In productie vervang je dit door een API-call naar je VoIP-provider
     (Twilio, Zadarma, etc.) om een echt nummer te bestellen.
-    Als er al een nummer is, laten we dat staan.
+    Als er al een nummer is, laten we dat staan (behalve oude 0800-testnummers).
     """
     settings = get_company_ai_settings(company_id) or {}
     existing = (
         (settings.get("phone_number") or settings.get("ai_phone_number") or "")
         .strip()
     )
+
+    # Als er al een geldig nummer is (geen oude 0800), nooit automatisch veranderen
+    if existing and not existing.startswith("0800"):
+        return existing
+
+    # DEMO: pseudo-nummers genereren op basis van company_id
+    if country_code == "BE":
+        new_number = f"+32 2 {company_id:04d} 000"
+    elif country_code == "NL":
+        new_number = f"+31 85 {company_id:04d} 000"
+    else:
+        new_number = f"+32 2 {company_id:04d} 000"
+
+    set_company_ai_phone_number(company_id, new_number)
+    update_company_ai_line(
+        company_id,
+        line_type="standard",
+        premium_rate_cents=None,
+    )
+
+    return new_number
 
     # Als er al een nummer is, nooit automatisch veranderen
     if existing and not existing.startswith("0800"):
@@ -790,7 +811,7 @@ def render_ai(company_id: int):
 
     line_type = settings.get("ai_line_type") or "standard"
 
-        phone_number = (
+    phone_number = (
         settings.get("phone_number")
         or settings.get("ai_phone_number")
         or ""
@@ -799,6 +820,7 @@ def render_ai(company_id: int):
     # Oude test-0800 nummers uit vorige versie negeren
     if phone_number.startswith("0800"):
         phone_number = ""
+
 
     guard_max_minutes = int(settings.get("ai_guard_max_minutes", 8) or 8)
     guard_idle_seconds = int(settings.get("ai_guard_idle_seconds", 25) or 25)
