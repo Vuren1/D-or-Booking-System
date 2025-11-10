@@ -1031,7 +1031,7 @@ def render_ai(company_id: int):
     )
 
     # ========== OPSLAAN ==========
-    if st.button("AI-instellingen opslaan", type="primary", key="ai_save_btn"):
+        if st.button("AI-instellingen opslaan", type="primary", key="ai_save_btn"):
         try:
             set_company_ai_enabled(company_id, enabled_new)
 
@@ -1064,6 +1064,7 @@ def render_ai(company_id: int):
             st.rerun()
 
         except Exception as e:
+            _error(f"Opslaan mislukt: {e}")
 
 def render_account(cid: int):
     st.markdown("## Account & abonnement")
