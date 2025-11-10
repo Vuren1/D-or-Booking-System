@@ -72,11 +72,20 @@ init_db()
 # Helpers
 # =============================
 
+# Welke provider per land
+AI_NUMBER_PROVIDERS = {
+    "BE": {"provider": "zadarma"},
+    "NL": {"provider": "zadarma"},
+    # overige landen: default = Twilio in _provision_ai_number
+}
+
+# Landen die je in de UI aanbiedt
 SUPPORTED_AI_COUNTRIES = {
     "BE": {"label": "België"},
     "NL": {"label": "Nederland"},
 }
 
+# Bundelplannen per land (prijzen kun je later aanpassen)
 AI_BUNDLE_PLANS = {
     "BE": [
         {"minutes": 100, "price": 10.0},
@@ -88,9 +97,10 @@ AI_BUNDLE_PLANS = {
         {"minutes": 250, "price": 20.0},
         {"minutes": 500, "price": 30.0},
     ],
-    # later: voeg hier gewoon landen toe met eigen prijzen
-
+    # later: meer landen toevoegen met eigen prijzen
 }
+
+
 def _detect_ai_country(phone_number: str) -> str | None:
     """Bepaal landcode op basis van het AI-nummer."""
     if not phone_number:
@@ -101,13 +111,35 @@ def _detect_ai_country(phone_number: str) -> str | None:
         return "NL"
     return None
 
-def _assign_ai_number(company_id: int, country_code: str) -> str:
+
+def _zadarma_buy_number(country_code: str) -> str:
     """
-    DEMO-implementatie:
-    Wijs een lokaal AI-nummer toe op basis van het gekozen land.
-    In productie vervang je dit door een API-call naar je VoIP-provider
-    (Twilio, Zadarma, etc.) om een echt nummer te bestellen.
-    Als er al een geldig nummer is (geen oude 0800-testnummers), laten we dat staan.
+    PSEUDO IMPLEMENTATIE.
+    Hier komt later je echte Zadarma API-call.
+    Voor nu geven we een fake demo-nummer terug zodat de app werkt.
+    """
+    if country_code == "BE":
+        return "+32 2 9999 000"
+    if country_code == "NL":
+        return "+31 85 9999 000"
+    return "+32 2 9999 000"
+
+
+def _twilio_buy_number(country_code: str) -> str:
+    """
+    PSEUDO IMPLEMENTATIE.
+    Hier komt later je Twilio API-call.
+    Voor nu een fake demo-nummer.
+    """
+    return "+1 555 000 0000"
+
+
+def _provision_ai_number(company_id: int, country_code: str) -> str:
+    """
+    Provision een AI-nummer voor dit bedrijf op basis van land.
+    - BE/NL -> Zadarma (zie AI_NUMBER_PROVIDERS)
+    - andere landen -> Twilio (fallback)
+    NU: gebruikt nog fake nummers; later vervang je de helpers.
     """
     settings = get_company_ai_settings(company_id) or {}
     existing = (
@@ -115,26 +147,28 @@ def _assign_ai_number(company_id: int, country_code: str) -> str:
         .strip()
     )
 
-    # Als er al een geldig nummer is (en geen oud 0800-testnummer), niet wijzigen
+    # Als er al een geldig nummer is (en geen oud 0800-testnummer), laat staan
     if existing and not existing.startswith("0800"):
         return existing
 
-    # DEMO: pseudo-nummers genereren op basis van company_id
-    if country_code == "BE":
-        new_number = f"+32 2 {company_id:04d} 000"
-    elif country_code == "NL":
-        new_number = f"+31 85 {company_id:04d} 000"
-    else:
-        new_number = f"+32 2 {company_id:04d} 000"
+    provider_cfg = AI_NUMBER_PROVIDERS.get(country_code)
+    provider = provider_cfg["provider"] if provider_cfg else "twilio"
 
+    if provider == "zadarma":
+        new_number = _zadarma_buy_number(country_code)
+    else:
+        new_number = _twilio_buy_number(country_code)
+
+    # Opslaan in jouw eigen systeem
     set_company_ai_phone_number(company_id, new_number)
     update_company_ai_line(
         company_id,
-        line_type="standard",
+        line_type="standard",        # gewoon lokaal AI-nummer
         premium_rate_cents=None,
     )
 
     return new_number
+
 
 def _parse_time_str(value: str) -> dtime:
     try:
@@ -142,6 +176,7 @@ def _parse_time_str(value: str) -> dtime:
         return dtime(int(h), int(m))
     except Exception:
         return dtime(9, 0)
+
 
 def _format_money(x) -> str:
     try:
@@ -172,11 +207,11 @@ def _get_query_params():
 
 def _set_query_params(**kwargs):
     try:
-        # nieuwe API: hele mapping toewijzen
         st.query_params = {k: str(v) for k, v in kwargs.items() if v is not None}
     except Exception:
-        st.experimental_set_query_params(**{k: v for k, v in kwargs.items() if v is not None})
-
+        st.experimental_set_query_params(
+            **{k: v for k, v in kwargs.items() if v is not None}
+        )
 
 # =============================
 # Login / registratie
@@ -884,9 +919,12 @@ def render_ai(company_id: int):
         )
 
         if st.button("Maak mijn AI-nummer aan", key="ai_create_number"):
-            new_number = _assign_ai_number(company_id, selected_country)
-            _success(f"Jouw AI-nummer is aangemaakt: {new_number}")
-            st.rerun()
+    try:
+        new_number = _provision_ai_number(company_id, selected_country)
+        _success(f"Jouw AI-nummer is aangemaakt: {new_number}")
+        st.rerun()
+    except Exception as e:
+        _error(f"AI-nummer aanmaken mislukt: {e}")
 
     # Na eventuele creatie opnieuw ophalen
     settings = get_company_ai_settings(company_id) or {}
