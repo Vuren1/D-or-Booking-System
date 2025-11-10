@@ -4,3 +4,5 @@ twilio
 python-dotenv
 stripe  # Voor betaling
 qrcode[pil]
+fastapi
+uvicorn[standard]
