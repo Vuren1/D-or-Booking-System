@@ -368,6 +368,28 @@ def get_company(company_id: int):
     conn.close()
     return row
 
+def get_company_by_ai_number(phone_number: str):
+    """
+    Zoek bedrijf op basis van het AI-telefoonnummer (spaties genegeerd).
+    """
+    if not phone_number:
+        return None
+
+    normalized = phone_number.replace(" ", "")
+
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        """
+        SELECT *
+        FROM companies
+        WHERE REPLACE(ai_phone_number, ' ', '') = ?
+        """,
+        (normalized,),
+    )
+    row = c.fetchone()
+    conn.close()
+    return row
 
 def get_company_by_email(email: str):
     conn = get_connection()

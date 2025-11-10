@@ -18,7 +18,6 @@ def handle_turn(
             "hangup": True,
         }
 
-    # Eerste beurt
     if not user_text:
         return {
             "say": f"Welkom bij {company['name']}. Waarmee kan ik u helpen?",
@@ -47,4 +46,3 @@ def handle_turn(
         "expect_input": True,
         "hangup": False,
     }
-
