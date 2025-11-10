@@ -77,6 +77,29 @@ SUPPORTED_AI_COUNTRIES = {
     "NL": {"label": "Nederland"},
 }
 
+AI_BUNDLE_PLANS = {
+    "BE": [
+        {"minutes": 100, "price": 10.0},
+        {"minutes": 250, "price": 20.0},
+        {"minutes": 500, "price": 30.0},
+    ],
+    "NL": [
+        {"minutes": 100, "price": 10.0},
+        {"minutes": 250, "price": 20.0},
+        {"minutes": 500, "price": 30.0},
+    ],
+    # later: voeg hier gewoon landen toe met eigen prijzen
+
+}
+def _detect_ai_country(phone_number: str) -> str | None:
+    """Bepaal landcode op basis van het AI-nummer."""
+    if not phone_number:
+        return None
+    if phone_number.startswith("+32"):
+        return "BE"
+    if phone_number.startswith("+31"):
+        return "NL"
+    return None
 
 def _assign_ai_number(company_id: int, country_code: str) -> str:
     """
@@ -896,51 +919,55 @@ def render_ai(company_id: int):
             _success(f"Jouw AI-nummer is aangemaakt: {new_number}")
             st.rerun()
 
-    # Na eventuele creatie opnieuw ophalen
-    settings = get_company_ai_settings(company_id) or {}
-    phone_number = (
-        settings.get("phone_number")
-        or settings.get("ai_phone_number")
-        or ""
-    ).strip()
-    ai_minutes = get_ai_local_minutes_balance(company_id)
-
-    # ========== BUNDELS (alleen tonen als er een AI-nummer is) ==========
+        # ========== BUNDELS (alleen tonen als er een AI-nummer is) ==========
     if phone_number:
         st.markdown("### AI-belminuten bundels")
+
+        ai_country_code = _detect_ai_country(phone_number)
+        plans = AI_BUNDLE_PLANS.get(ai_country_code, [])
 
         st.markdown(
             f"Alle gesprekken die via jouw AI-nummer `{phone_number}` binnenkomen, "
             "verbruiken minuten uit je AI-bundel."
         )
-
         st.metric("Huidige AI-minuten", f"{ai_minutes} min")
 
-        c1, c2, c3 = st.columns(3)
+        if not plans:
+            st.info(
+                "Voor dit AI-nummer zijn nog geen bundels geconfigureerd. "
+                "Neem contact op met support of voeg dit land toe in AI_BUNDLE_PLANS."
+            )
+        else:
+            cols = st.columns(len(plans))
+            for col, plan in zip(cols, plans):
+                with col:
+                    minutes = plan["minutes"]
+                    price = plan["price"]
+                    price_per_min = price / minutes
+                    st.write(f"**{minutes} minuten**")
+                    st.write(f"€{price:.0f} · €{price_per_min:.2f}/min")
+                    if st.button(
+                        f"Koop {minutes} min",
+                        key=f"bundle_{ai_country_code}_{minutes}",
+                    ):
+                        add_ai_local_minutes(company_id, minutes)
+                        _success(f"{minutes} AI-minuten toegevoegd.")
+                        st.rerun()
 
-        with c1:
-            st.write("**100 minuten**")
-            st.write("€10 · €0,10/min")
-            if st.button("Koop 100 min", key="bundle_100"):
-                add_ai_local_minutes(company_id, 100)
-                _success("100 AI-minuten toegevoegd.")
-                st.rerun()
+        # Optioneel: handmatig toevoegen (alleen als er een nummer is)
+        extra_min = st.number_input(
+            "Handmatig AI-minuten toevoegen (alleen admin/debug)",
+            min_value=0,
+            max_value=10000,
+            step=50,
+            key="ai_add_minutes",
+        )
 
-        with c2:
-            st.write("**250 minuten**")
-            st.write("€20 · €0,08/min")
-            if st.button("Koop 250 min", key="bundle_250"):
-                add_ai_local_minutes(company_id, 250)
-                _success("250 AI-minuten toegevoegd.")
-                st.rerun()
-
-        with c3:
-            st.write("**500 minuten**")
-            st.write("€30 · €0,06/min")
-            if st.button("Koop 500 min", key="bundle_500"):
-                add_ai_local_minutes(company_id, 500)
-                _success("500 AI-minuten toegevoegd.")
-                st.rerun()
+    else:
+        st.warning(
+            "Maak eerst je AI-nummer aan (kies land en klik op 'Maak mijn AI-nummer aan'). "
+            "Daarna verschijnen hier de bundels voor dat land."
+        )
 
         # Optioneel: handmatige toevoeging (admin/debug)
         extra_min = st.number_input(
