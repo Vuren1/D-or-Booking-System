@@ -1,19 +1,15 @@
-from fastapi import FastAPI
-from fastapi.responses import PlainTextResponse
-
-from voice_backend.providers.zadarma import router as zadarma_router
-from database import init_db
+from fastapi import FastAPI, Request
+from fastapi.responses import Response, PlainTextResponse
+from voice_backend.providers.twilio import handle_twilio_webhook
 
 app = FastAPI()
 
-# Zorg dat de SQLite-tabellen bestaan (companies, services, etc.)
-init_db()
+@app.post("/twilio/voice")
+async def twilio_voice(request: Request):
+    form = await request.form()
+    twiml = handle_twilio_webhook(form)
+    return Response(content=twiml, media_type="text/xml")
 
-# Koppel Zadarma router
-app.include_router(zadarma_router)
-
-
-@app.get("/health", response_class=PlainTextResponse)
+@app.get("/health")
 async def health():
-    return "OK - voice backend draait"
-
+    return PlainTextResponse("OK - voice backend draait")
