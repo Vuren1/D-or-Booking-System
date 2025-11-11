@@ -2,7 +2,8 @@ streamlit
 pandas
 twilio
 python-dotenv
-stripe  # Voor betaling
+stripe          # Voor betaling
 qrcode[pil]
 fastapi
 uvicorn[standard]
+python-multipart
